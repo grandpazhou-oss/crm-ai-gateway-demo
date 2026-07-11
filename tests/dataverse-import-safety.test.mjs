@@ -55,7 +55,11 @@ test("Dataverse CLI sources defer configuration and guard direct execution", asy
     assert.doesNotMatch(source, /^main\(\)\.catch/m, `${script} executes main without the shared direct-run gate`);
     assert.doesNotMatch(source, /^\s*await\s+(?:main|fetch)\(/m, `${script} has a top-level execution side effect`);
     assert.match(source, /export async function main\(/, `${script} does not export main`);
-    assert.match(source, /runDataverseCli\(import\.meta\.url, main\);/, `${script} does not use the shared CLI gate`);
+    if (script === "register-actual-totals-plugin.mjs") {
+      assert.match(source, /if \(isDirectRun\(import\.meta\.url\)\)/, `${script} does not use a direct-run guard`);
+    } else {
+      assert.match(source, /runDataverseCli\(import\.meta\.url, main\);/, `${script} does not use the shared CLI gate`);
+    }
   }
 });
 

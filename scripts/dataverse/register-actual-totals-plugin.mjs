@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { runDataverseCli } from "./lib/environment-safety.mjs";
 
 const ALLOWED_TEST_HOSTNAME = "org91f5f65f.crm5.dynamics.com";
 const PRODUCTION_HOSTNAME = "lcn-crm.crm7.dynamics.com";
@@ -141,4 +140,9 @@ export async function main(argv = process.argv.slice(2)) {
   return plan;
 }
 
-runDataverseCli(import.meta.url, main);
+if (isDirectRun(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}
