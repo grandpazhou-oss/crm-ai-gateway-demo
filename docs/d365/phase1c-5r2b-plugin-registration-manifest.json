@@ -1,0 +1,180 @@
+{
+  "phase": "1C-5R2B",
+  "dryRun": true,
+  "executable": false,
+  "targetEnvironment": "https://your-org.crm.dynamics.com",
+  "solution": "CRMAIGatewayDemo",
+  "assembly": {
+    "name": "CrmAiGateway.ActualTotals.Plugin",
+    "targetFramework": "net462",
+    "sourceProject": "plugins/ActualTotals/src/CrmAiGateway.ActualTotals.Plugin/CrmAiGateway.ActualTotals.Plugin.csproj",
+    "deployment": "Sandbox / Database",
+    "customAssemblyDependencies": [],
+    "corePackaging": "Core source is linked into the plugin project and compiled into the same DLL",
+    "registrationAuthorized": false
+  },
+  "filteringAttributes": [
+    "aigw_aprilactualrevenue",
+    "aigw_mayactualrevenue",
+    "aigw_juneactualrevenue",
+    "aigw_julyactualrevenue",
+    "aigw_augustactualrevenue",
+    "aigw_septemberactualrevenue",
+    "aigw_octoberactualrevenue",
+    "aigw_novemberactualrevenue",
+    "aigw_decemberactualrevenue",
+    "aigw_januaryactualrevenue",
+    "aigw_februaryactualrevenue",
+    "aigw_marchactualrevenue",
+    "aigw_opportunityid",
+    "transactioncurrencyid"
+  ],
+  "forbiddenFilteringAttributes": [
+    "aigw_annualactualrevenue",
+    "aigw_yearrevenueactual",
+    "aigw_yearrevenueactualcny",
+    "any _base field"
+  ],
+  "steps": [
+    {
+      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
+      "message": "Create",
+      "table": "aigw_actualmanagement",
+      "stage": 10,
+      "mode": "Synchronous",
+      "rank": 10,
+      "filteringAttributes": [],
+      "images": []
+    },
+    {
+      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
+      "message": "Update",
+      "table": "aigw_actualmanagement",
+      "stage": 10,
+      "mode": "Synchronous",
+      "rank": 10,
+      "filteringAttributesFromRoot": true,
+      "images": [
+        {
+          "name": "PreImage",
+          "type": "PreImage",
+          "attributes": [
+            "aigw_opportunityid",
+            "transactioncurrencyid",
+            "aigw_annualactualrevenue",
+            "aigw_aprilactualrevenue",
+            "aigw_mayactualrevenue",
+            "aigw_juneactualrevenue",
+            "aigw_julyactualrevenue",
+            "aigw_augustactualrevenue",
+            "aigw_septemberactualrevenue",
+            "aigw_octoberactualrevenue",
+            "aigw_novemberactualrevenue",
+            "aigw_decemberactualrevenue",
+            "aigw_januaryactualrevenue",
+            "aigw_februaryactualrevenue",
+            "aigw_marchactualrevenue"
+          ]
+        }
+      ]
+    },
+    {
+      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+      "message": "Create",
+      "table": "aigw_actualmanagement",
+      "stage": 20,
+      "mode": "Synchronous",
+      "rank": 20,
+      "filteringAttributes": [],
+      "images": []
+    },
+    {
+      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+      "message": "Update",
+      "table": "aigw_actualmanagement",
+      "stage": 20,
+      "mode": "Synchronous",
+      "rank": 20,
+      "filteringAttributesFromRoot": true,
+      "images": [
+        {
+          "name": "PreImage",
+          "type": "PreImage",
+          "attributesFrom": "PreValidation Update PreImage"
+        }
+      ]
+    },
+    {
+      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+      "message": "Create",
+      "table": "aigw_actualmanagement",
+      "stage": 40,
+      "mode": "Synchronous",
+      "rank": 30,
+      "filteringAttributes": [],
+      "images": [
+        {
+          "name": "PostImage",
+          "type": "PostImage",
+          "attributes": ["aigw_opportunityid", "transactioncurrencyid", "aigw_annualactualrevenue"]
+        }
+      ]
+    },
+    {
+      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+      "message": "Update",
+      "table": "aigw_actualmanagement",
+      "stage": 40,
+      "mode": "Synchronous",
+      "rank": 30,
+      "filteringAttributesFromRoot": true,
+      "images": [
+        {
+          "name": "PreImage",
+          "type": "PreImage",
+          "attributes": ["aigw_opportunityid"]
+        },
+        {
+          "name": "PostImage",
+          "type": "PostImage",
+          "attributes": ["aigw_opportunityid", "aigw_annualactualrevenue"]
+        }
+      ]
+    },
+    {
+      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+      "message": "Delete",
+      "table": "aigw_actualmanagement",
+      "stage": 40,
+      "mode": "Synchronous",
+      "rank": 30,
+      "filteringAttributes": [],
+      "images": [
+        {
+          "name": "PreImage",
+          "type": "PreImage",
+          "attributes": ["aigw_opportunityid"]
+        }
+      ]
+    }
+  ],
+  "writeSurface": {
+    "child": ["aigw_annualactualrevenue"],
+    "parent": ["aigw_yearrevenueactual"],
+    "forbidden": ["aigw_yearrevenueactualcny", "aigw_yearrevenueactual_base", "any _base field"]
+  },
+  "preDeploymentGates": [
+    "dotnet test passes offline",
+    "net462 Release assembly builds",
+    "assembly identity and strong-name/package strategy confirmed",
+    "all field metadata re-read and matches manifest",
+    "all seven steps and images reviewed",
+    "Phase 1C-5 seed remains blocked"
+  ],
+  "rollback": {
+    "automatic": false,
+    "requiresSeparateAuthorization": true,
+    "order": ["disable new steps", "remove new images", "remove new steps", "remove assembly only after dependency check"],
+    "data": "No data is created by registration. Parent totals are recalculated during Phase 1C-5R4 validation."
+  }
+}
