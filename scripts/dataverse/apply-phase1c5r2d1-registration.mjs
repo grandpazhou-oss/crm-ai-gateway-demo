@@ -183,15 +183,19 @@ function buildPluginTypePayload(definition, assemblyId) {
   };
 }
 
-function buildResumePlan({ assemblyCount, existingPluginTypeCount, missingPluginTypeCount, conflictingPluginTypeCount, stepCount, imageCount }) {
+function buildResumePlan({ assemblyCount, existingPluginTypeCount, missingPluginTypeCount, conflictingPluginTypeCount, existingStepCount = 0, missingStepCount = 7, conflictingStepCount = 0, existingImageCount = 0, missingImageCount = 6, conflictingImageCount = 0, stepCount, imageCount }) {
   assert(assemblyCount === 1, `Resume requires exactly one existing Assembly, got ${assemblyCount}.`);
   assert(Number.isInteger(existingPluginTypeCount) && existingPluginTypeCount >= 0, "Resume requires an existing Plugin Type count.");
   assert(Number.isInteger(missingPluginTypeCount) && missingPluginTypeCount >= 0, "Resume requires a missing Plugin Type count.");
   assert(Number.isInteger(conflictingPluginTypeCount) && conflictingPluginTypeCount >= 0, "Resume requires a conflicting Plugin Type count.");
   assert(conflictingPluginTypeCount === 0, `Blocked: conflicting Plugin Types=${conflictingPluginTypeCount}.`);
   assert(existingPluginTypeCount + missingPluginTypeCount === 3, "Resume Plugin Type classification must account for all three definitions.");
-  assert(stepCount === 0, `Resume requires zero existing matching Steps, got ${stepCount}.`);
-  assert(imageCount === 0, `Resume requires zero existing matching Images, got ${imageCount}.`);
+  const resolvedExistingStepCount = stepCount === undefined ? existingStepCount : stepCount;
+  const resolvedExistingImageCount = imageCount === undefined ? existingImageCount : imageCount;
+  assert(resolvedExistingStepCount + missingStepCount === 7, "Resume Step classification must account for all seven definitions.");
+  assert(resolvedExistingImageCount + missingImageCount === 6, "Resume Image classification must account for all six definitions.");
+  assert(conflictingStepCount === 0, `Blocked: conflicting Steps=${conflictingStepCount}.`);
+  assert(conflictingImageCount === 0, `Blocked: conflicting Images=${conflictingImageCount}.`);
   return {
     resumeExistingAssembly: true,
     createAssembly: false,
@@ -202,20 +206,82 @@ function buildResumePlan({ assemblyCount, existingPluginTypeCount, missingPlugin
     plannedPluginTypeUpdates: 0,
     plannedPluginTypeDeletes: 0,
     plannedSteps: 7,
+    plannedStepCreates: missingStepCount,
+    plannedStepUpdates: 0,
+    plannedStepDeletes: 0,
     plannedImages: 6,
+    plannedImageCreates: missingImageCount,
+    plannedImageUpdates: 0,
+    plannedImageDeletes: 0,
     plannedEnabledSteps: 0,
   };
 }
 
 function buildImagePayload(image, stepId) {
+  return buildImagePayloadForMessage(image, stepId, "Update");
+}
+
+function messagePropertyNameForMessage(message) {
+  return message === "Create" ? "Id" : "Target";
+}
+
+function buildImagePayloadForMessage(image, stepId, message) {
   return {
     name: image.name,
     entityalias: image.alias,
     imagetype: image.type === "PreImage" ? 0 : 1,
     attributes: image.fields.join(","),
-    messagepropertyname: "Target",
+    messagepropertyname: messagePropertyNameForMessage(message),
     "sdkmessageprocessingstepid@odata.bind": `/sdkmessageprocessingsteps(${stepId})`,
   };
+}
+
+function normalizeFilteringAttributes(value) {
+  return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function sameStringList(left, right) {
+  return JSON.stringify(normalizeFilteringAttributes(left).slice().sort()) === JSON.stringify(normalizeFilteringAttributes(right).slice().sort());
+}
+
+function classifySteps(definitions, rows, pluginTypeByName) {
+  const existing = [];
+  const missing = [];
+  const conflicting = [];
+  for (const definition of definitions) {
+    const matches = rows.filter((row) => row.name === definition.displayName);
+    const expectedPluginTypeId = pluginTypeByName[definition.pluginType];
+    const exact = matches.filter((row) => Number(row.stage) === definition.stage
+      && Number(row.mode) === definition.mode
+      && Number(row.rank) === definition.rank
+      && sameStringList(row.filteringattributes, definition.filteringAttributes)
+      && lower(row._plugintypeid_value) === lower(expectedPluginTypeId));
+    if (matches.length === 0) missing.push(definition);
+    else if (matches.length === 1 && exact.length === 1) existing.push({ definition, row: matches[0] });
+    else conflicting.push({ definition, rows: matches });
+  }
+  return { existing, missing, conflicting };
+}
+
+function classifyImages(definitions, rows, stepIdByLogicalIdentifier) {
+  const existing = [];
+  const missing = [];
+  const conflicting = [];
+  for (const step of definitions) {
+    const stepId = stepIdByLogicalIdentifier[step.logicalIdentifier];
+    for (const image of step.images) {
+      const matches = rows.filter((row) => lower(row._sdkmessageprocessingstepid_value) === lower(stepId) && row.name === image.name);
+      const expectedType = image.type === "PreImage" ? 0 : 1;
+      const exact = matches.filter((row) => row.entityalias === image.alias
+        && Number(row.imagetype) === expectedType
+        && row.attributes === image.fields.join(",")
+        && row.messagepropertyname === messagePropertyNameForMessage(step.message));
+      if (matches.length === 0) missing.push({ step, image });
+      else if (matches.length === 1 && exact.length === 1) existing.push({ step, image, row: matches[0] });
+      else conflicting.push({ step, image, rows: matches });
+    }
+  }
+  return { existing, missing, conflicting };
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -317,22 +383,31 @@ export async function main(argv = process.argv.slice(2)) {
     const assemblyRows = (await get(`/api/data/v9.2/pluginassemblies?$select=pluginassemblyid,pluginassemblyidunique,name,version,publickeytoken,isolationmode,sourcetype,ismanaged&$filter=name eq '${escapeODataString(ASSEMBLY_NAME)}'`)).value || [];
     const typeRows = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=${expectedPluginTypeNames.map((name) => `typename eq '${escapeODataString(name)}'`).join(" or ")}`)).value || [];
     const stepRows = (await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value&$filter=${manifest.steps.map((step) => `name eq '${escapeODataString(step.displayName)}'`).join(" or ")}`)).value || [];
-    // Image names are not globally unique in Dataverse. With zero target Steps,
-    // no existing Image can be a child of this registration attempt.
-    const imageRows = [];
     assert(assemblyRows.length === 1, `Resume requires exactly one matching Plugin Assembly, got ${assemblyRows.length}.`);
-    assert(stepRows.length === 0, `Blocked: existing matching Step count=${stepRows.length}.`);
-    assert(imageRows.length === 0, `Blocked: existing matching Image count=${imageRows.length}.`);
     const assemblyId = assemblyRows[0].pluginassemblyid;
     const typeClassification = classifyPluginTypes(pluginTypeDefinitions, typeRows, assemblyId);
     assert(typeClassification.conflicting.length === 0, `Blocked: conflicting Plugin Types=${typeClassification.conflicting.length}.`);
+    const preflightPluginTypeByName = Object.fromEntries(typeClassification.existing.map(({ definition, row }) => [definition.typename, row.plugintypeid]));
+    const stepClassification = classifySteps(manifest.steps, stepRows, preflightPluginTypeByName);
+    assert(stepClassification.conflicting.length === 0, `Blocked: conflicting Steps=${stepClassification.conflicting.length}.`);
+    const preflightStepIdByLogicalIdentifier = Object.fromEntries(stepClassification.existing.map(({ definition, row }) => [definition.logicalIdentifier, row.sdkmessageprocessingstepid]));
+    const existingStepIds = Object.values(preflightStepIdByLogicalIdentifier);
+    const imageRows = existingStepIds.length
+      ? (await get(`/api/data/v9.2/sdkmessageprocessingstepimages?$select=sdkmessageprocessingstepimageid,name,entityalias,imagetype,attributes,messagepropertyname,_sdkmessageprocessingstepid_value&$filter=${existingStepIds.map((id) => `_sdkmessageprocessingstepid_value eq ${id}`).join(" or ")}`)).value || []
+      : [];
+    const imageClassification = classifyImages(manifest.steps, imageRows, preflightStepIdByLogicalIdentifier);
+    assert(imageClassification.conflicting.length === 0, `Blocked: conflicting Images=${imageClassification.conflicting.length}.`);
     const resumePlan = buildResumePlan({
       assemblyCount: assemblyRows.length,
       existingPluginTypeCount: typeClassification.existing.length,
       missingPluginTypeCount: typeClassification.missing.length,
       conflictingPluginTypeCount: typeClassification.conflicting.length,
-      stepCount: stepRows.length,
-      imageCount: imageRows.length,
+      existingStepCount: stepClassification.existing.length,
+      missingStepCount: stepClassification.missing.length,
+      conflictingStepCount: stepClassification.conflicting.length,
+      existingImageCount: imageClassification.existing.length,
+      missingImageCount: imageClassification.missing.length,
+      conflictingImageCount: imageClassification.conflicting.length,
     });
     audit.plan = resumePlan;
     audit.preflight = {
@@ -340,8 +415,12 @@ export async function main(argv = process.argv.slice(2)) {
       existingPluginTypes: typeClassification.existing.map(({ definition, row }) => ({ definition, id: row.plugintypeid, assemblyLookup: row._pluginassemblyid_value })),
       missingPluginTypes: typeClassification.missing,
       conflictingPluginTypes: typeClassification.conflicting,
-      existingStepCount: stepRows.length,
-      existingMatchingImageCount: imageRows.length,
+      existingSteps: stepClassification.existing.map(({ definition, row }) => ({ logicalIdentifier: definition.logicalIdentifier, id: row.sdkmessageprocessingstepid, statecode: row.statecode, statuscode: row.statuscode })),
+      missingSteps: stepClassification.missing.map((step) => step.logicalIdentifier),
+      conflictingSteps: stepClassification.conflicting,
+      existingImages: imageClassification.existing.map(({ step, image, row }) => ({ logicalIdentifier: step.logicalIdentifier, name: image.name, id: row.sdkmessageprocessingstepimageid })),
+      missingImages: imageClassification.missing.map(({ step, image }) => `${step.logicalIdentifier}:${image.name}`),
+      conflictingImages: imageClassification.conflicting,
       assembly: { pluginassemblyid: assemblyRows[0].pluginassemblyid, pluginassemblyidunique: assemblyRows[0].pluginassemblyidunique, name: assemblyRows[0].name, version: assemblyRows[0].version, publickeytoken: assemblyRows[0].publickeytoken, isolationmode: assemblyRows[0].isolationmode, sourcetype: assemblyRows[0].sourcetype, ismanaged: assemblyRows[0].ismanaged },
     };
     assert(isGuid(assemblyRows[0].pluginassemblyid), "Existing Assembly primary pluginassemblyid is invalid.");
@@ -398,8 +477,22 @@ export async function main(argv = process.argv.slice(2)) {
     const pluginTypeByName = Object.fromEntries(pluginTypes.map((type) => [type.typename, type.plugintypeid]));
     audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, name: type.name, friendlyname: type.friendlyname, assemblyLookup: type._pluginassemblyid_value, status: audit.actual.pluginTypes.find((item) => item.id === type.plugintypeid)?.status || "verified" }));
 
-    const stepIdByLogicalIdentifier = {};
-    for (const step of manifest.steps) {
+    const stepIdByLogicalIdentifier = Object.fromEntries(stepClassification.existing.map(({ definition, row }) => [definition.logicalIdentifier, row.sdkmessageprocessingstepid]));
+    for (const { definition: step, row } of stepClassification.existing) {
+      let verified = row;
+      let status = "existing-and-matching";
+      if (!(Number(verified.statecode) === 1 && Number(verified.statuscode) === 2)) {
+        await patch(`/api/data/v9.2/sdkmessageprocessingsteps(${verified.sdkmessageprocessingstepid})`, { statecode: 1, statuscode: 2 }, "stepPatch");
+        const result = await readAfterWriteById(get, `/api/data/v9.2/sdkmessageprocessingsteps(${verified.sdkmessageprocessingstepid})?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value`, `disabled existing step ${step.logicalIdentifier}`);
+        recordReadAfterWrite(audit, "StepDisabled", step.logicalIdentifier, result);
+        verified = result.row;
+        assert(verified, `Disabled existing Step ${step.logicalIdentifier} was not visible after read-after-write retry.`);
+        status = "existing-disabled";
+      }
+      assert(Number(verified.statecode) === 1 && Number(verified.statuscode) === 2, `Step ${step.logicalIdentifier} is not Disabled.`);
+      audit.actual.steps.push({ id: verified.sdkmessageprocessingstepid, logicalIdentifier: step.logicalIdentifier, name: verified.name, message: step.message, stage: verified.stage, mode: verified.mode, rank: verified.rank, statecode: verified.statecode, statuscode: verified.statuscode, filteringattributes: verified.filteringattributes, status });
+    }
+    for (const step of stepClassification.missing) {
       const pluginTypeId = pluginTypeByName[step.pluginType];
       const messageId = messageByName[step.message];
       const filterId = filterByMessageId[messageId];
@@ -428,27 +521,30 @@ export async function main(argv = process.argv.slice(2)) {
       stepIdByLogicalIdentifier[step.logicalIdentifier] = stepId;
       audit.actual.steps.push({ id: stepId, logicalIdentifier: step.logicalIdentifier, name: verified.name, message: step.message, stage: verified.stage, mode: verified.mode, rank: verified.rank, statecode: verified.statecode, statuscode: verified.statuscode, filteringattributes: verified.filteringattributes });
     }
+    assert(Object.keys(stepIdByLogicalIdentifier).length === manifest.steps.length, `Blocked: expected ${manifest.steps.length} Steps, got ${Object.keys(stepIdByLogicalIdentifier).length}.`);
 
-    for (const step of manifest.steps) {
-      const stepId = stepIdByLogicalIdentifier[step.logicalIdentifier];
-      for (const image of step.images) {
-        const payload = buildImagePayload(image, stepId);
-        let response;
-        try {
-          response = await post("/api/data/v9.2/sdkmessageprocessingstepimages", payload, "imagePost");
-        } catch (error) {
-          await saveAudit("registration-audit-failed.json");
-          throw error;
-        }
-        const imageId = extractId(response, "sdkmessageprocessingstepimage");
-        const imageResult = await readAfterWriteById(get, `/api/data/v9.2/sdkmessageprocessingstepimages(${imageId})?$select=sdkmessageprocessingstepimageid,name,entityalias,imagetype,attributes,messagepropertyname,_sdkmessageprocessingstepid_value`, `image ${step.logicalIdentifier}:${image.name}`);
-        recordReadAfterWrite(audit, "Image", `${step.logicalIdentifier}:${image.name}`, imageResult);
-        const imageRow = imageResult.row;
-        assert(imageRow, `Image ${step.logicalIdentifier}:${image.name} was not visible after read-after-write retry; no POST retry was attempted.`);
-        assert(imageRow.name === image.name && imageRow.entityalias === image.alias && Number(imageRow.imagetype) === (image.type === "PreImage" ? 0 : 1) && imageRow.messagepropertyname === "Target" && lower(imageRow._sdkmessageprocessingstepid_value) === lower(stepId), `Image readback mismatch for ${step.logicalIdentifier}:${image.name}.`);
-        audit.actual.images.push({ id: imageId, step: step.logicalIdentifier, name: imageRow.name, alias: imageRow.entityalias, imageType: imageRow.imagetype, attributes: imageRow.attributes, messagePropertyName: imageRow.messagepropertyname });
-      }
+    for (const { step, image, row } of imageClassification.existing) {
+      audit.actual.images.push({ id: row.sdkmessageprocessingstepimageid, step: step.logicalIdentifier, name: row.name, alias: row.entityalias, imageType: row.imagetype, attributes: row.attributes, messagePropertyName: row.messagepropertyname, status: "existing-and-matching" });
     }
+    for (const { step, image } of imageClassification.missing) {
+      const stepId = stepIdByLogicalIdentifier[step.logicalIdentifier];
+      const payload = buildImagePayloadForMessage(image, stepId, step.message);
+      let response;
+      try {
+        response = await post("/api/data/v9.2/sdkmessageprocessingstepimages", payload, "imagePost");
+      } catch (error) {
+        await saveAudit("registration-audit-failed.json");
+        throw error;
+      }
+      const imageId = extractId(response, "sdkmessageprocessingstepimage");
+      const imageResult = await readAfterWriteById(get, `/api/data/v9.2/sdkmessageprocessingstepimages(${imageId})?$select=sdkmessageprocessingstepimageid,name,entityalias,imagetype,attributes,messagepropertyname,_sdkmessageprocessingstepid_value`, `image ${step.logicalIdentifier}:${image.name}`);
+      recordReadAfterWrite(audit, "Image", `${step.logicalIdentifier}:${image.name}`, imageResult);
+      const imageRow = imageResult.row;
+      assert(imageRow, `Image ${step.logicalIdentifier}:${image.name} was not visible after read-after-write retry; no POST retry was attempted.`);
+      assert(imageRow.name === image.name && imageRow.entityalias === image.alias && Number(imageRow.imagetype) === (image.type === "PreImage" ? 0 : 1) && imageRow.attributes === image.fields.join(",") && imageRow.messagepropertyname === messagePropertyNameForMessage(step.message) && lower(imageRow._sdkmessageprocessingstepid_value) === lower(stepId), `Image readback mismatch for ${step.logicalIdentifier}:${image.name}.`);
+      audit.actual.images.push({ id: imageId, step: step.logicalIdentifier, name: imageRow.name, alias: imageRow.entityalias, imageType: imageRow.imagetype, attributes: imageRow.attributes, messagePropertyName: imageRow.messagepropertyname, status: "created" });
+    }
+    assert(audit.actual.images.length === manifest.steps.flatMap((step) => step.images).length, `Blocked: expected ${manifest.steps.flatMap((step) => step.images).length} Images, got ${audit.actual.images.length}.`);
 
     const componentTargets = [
       { type: COMPONENT_TYPES.pluginAssembly, id: assemblyId, label: "pluginAssembly" },
@@ -491,4 +587,4 @@ export async function main(argv = process.argv.slice(2)) {
 
 runDataverseCli(import.meta.url, main);
 
-export { buildPluginTypePayload, buildResumePlan, buildStepPayload, classifyPluginTypes, extractId, findPluginTypeByDefinition, readAfterWriteById, resolvePluginTypeAfterWrite, validatePluginTypeDefinitions };
+export { buildImagePayloadForMessage, buildPluginTypePayload, buildResumePlan, buildStepPayload, classifyImages, classifyPluginTypes, classifySteps, extractId, findPluginTypeByDefinition, readAfterWriteById, resolvePluginTypeAfterWrite, validatePluginTypeDefinitions };

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import test from "node:test";
 import {
   buildPluginTypePayload,
+  buildImagePayloadForMessage,
   buildResumePlan,
   buildStepPayload,
   classifyPluginTypes,
@@ -64,6 +65,13 @@ test("Step creation omits Disabled status until the post-create PATCH", () => {
   assert.equal(payload.mode, 0);
 });
 
+test("Create PostImage uses Id while Update and Delete images use Target", () => {
+  const image = { name: "PostImage", alias: "PostImage", type: "PostImage", fields: ["aigw_name"] };
+  assert.equal(buildImagePayloadForMessage(image, primaryAssemblyId, "Create").messagepropertyname, "Id");
+  assert.equal(buildImagePayloadForMessage({ ...image, type: "PreImage" }, primaryAssemblyId, "Update").messagepropertyname, "Target");
+  assert.equal(buildImagePayloadForMessage({ ...image, type: "PreImage" }, primaryAssemblyId, "Delete").messagepropertyname, "Target");
+});
+
 test("invalid assembly IDs are rejected before binding", () => {
   assert.throws(() => buildPluginTypePayload(pluginTypeDefinition, uniqueAssemblyId.replace(/.$/, "x")), /primary pluginassemblyid/);
 });
@@ -99,7 +107,13 @@ test("resume plan reuses exactly one existing assembly", () => {
     plannedPluginTypeUpdates: 0,
     plannedPluginTypeDeletes: 0,
     plannedSteps: 7,
+    plannedStepCreates: 7,
+    plannedStepUpdates: 0,
+    plannedStepDeletes: 0,
     plannedImages: 6,
+    plannedImageCreates: 6,
+    plannedImageUpdates: 0,
+    plannedImageDeletes: 0,
     plannedEnabledSteps: 0,
   });
 });
@@ -114,10 +128,12 @@ test("resume plan accepts one existing and two missing Plugin Types", () => {
   assert.equal(plan.plannedPluginTypeCreates, 2);
 });
 
-test("resume plan stops on conflicts or pre-existing Steps and Images", () => {
+test("resume plan stops on conflicts and accepts partial Steps and Images", () => {
   assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 1, stepCount: 0, imageCount: 0 }), /conflicting/);
-  assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 1, imageCount: 0 }), /Steps/);
-  assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 1 }), /Images/);
+  assert.equal(buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, existingStepCount: 1, missingStepCount: 6, conflictingStepCount: 0, existingImageCount: 0, missingImageCount: 6, conflictingImageCount: 0 }).plannedStepCreates, 6);
+  assert.equal(buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, existingStepCount: 7, missingStepCount: 0, conflictingStepCount: 0, existingImageCount: 1, missingImageCount: 5, conflictingImageCount: 0 }).plannedImageCreates, 5);
+  assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, existingStepCount: 1, missingStepCount: 6, conflictingStepCount: 1, existingImageCount: 0, missingImageCount: 6, conflictingImageCount: 0 }), /Steps/);
+  assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, existingStepCount: 7, missingStepCount: 0, conflictingStepCount: 0, existingImageCount: 1, missingImageCount: 5, conflictingImageCount: 1 }), /Images/);
 });
 
 test("resume source has no Assembly create, update, or delete operation", async () => {
@@ -143,7 +159,9 @@ test("resume plan has the frozen child component counts", () => {
   assert.equal(plan.plannedPluginTypes, 3);
   assert.equal(plan.plannedPluginTypeCreates, 2);
   assert.equal(plan.plannedSteps, 7);
+  assert.equal(plan.plannedStepCreates, 7);
   assert.equal(plan.plannedImages, 6);
+  assert.equal(plan.plannedImageCreates, 6);
 });
 
 test("resume executor requires explicit resume mode", async () => {
