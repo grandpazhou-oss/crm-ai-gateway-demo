@@ -4,7 +4,11 @@ import test from "node:test";
 import {
   buildPluginTypePayload,
   buildResumePlan,
+  classifyPluginTypes,
   extractId,
+  findPluginTypeByDefinition,
+  readAfterWriteById,
+  resolvePluginTypeAfterWrite,
   validatePluginTypeDefinitions,
 } from "../scripts/dataverse/apply-phase1c5r2d1-registration.mjs";
 
@@ -69,12 +73,15 @@ test("manifest Plugin Type definitions carry typename, name and friendlyName", a
 });
 
 test("resume plan reuses exactly one existing assembly", () => {
-  assert.deepEqual(buildResumePlan({ assemblyCount: 1, pluginTypeCount: 0, stepCount: 0, imageCount: 0 }), {
+  assert.deepEqual(buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 0 }), {
     resumeExistingAssembly: true,
     createAssembly: false,
     updateAssembly: false,
     deleteAssembly: false,
     plannedPluginTypes: 3,
+    plannedPluginTypeCreates: 2,
+    plannedPluginTypeUpdates: 0,
+    plannedPluginTypeDeletes: 0,
     plannedSteps: 7,
     plannedImages: 6,
     plannedEnabledSteps: 0,
@@ -82,14 +89,19 @@ test("resume plan reuses exactly one existing assembly", () => {
 });
 
 test("resume plan stops when assembly is missing or ambiguous", () => {
-  assert.throws(() => buildResumePlan({ assemblyCount: 0, pluginTypeCount: 0, stepCount: 0, imageCount: 0 }), /exactly one/);
-  assert.throws(() => buildResumePlan({ assemblyCount: 2, pluginTypeCount: 0, stepCount: 0, imageCount: 0 }), /exactly one/);
+  assert.throws(() => buildResumePlan({ assemblyCount: 0, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 0 }), /exactly one/);
+  assert.throws(() => buildResumePlan({ assemblyCount: 2, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 0 }), /exactly one/);
 });
 
-test("resume plan stops on pre-existing child components", () => {
-  assert.throws(() => buildResumePlan({ assemblyCount: 1, pluginTypeCount: 1, stepCount: 0, imageCount: 0 }), /Plugin Types/);
-  assert.throws(() => buildResumePlan({ assemblyCount: 1, pluginTypeCount: 0, stepCount: 1, imageCount: 0 }), /Steps/);
-  assert.throws(() => buildResumePlan({ assemblyCount: 1, pluginTypeCount: 0, stepCount: 0, imageCount: 1 }), /Images/);
+test("resume plan accepts one existing and two missing Plugin Types", () => {
+  const plan = buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 0 });
+  assert.equal(plan.plannedPluginTypeCreates, 2);
+});
+
+test("resume plan stops on conflicts or pre-existing Steps and Images", () => {
+  assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 1, stepCount: 0, imageCount: 0 }), /conflicting/);
+  assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 1, imageCount: 0 }), /Steps/);
+  assert.throws(() => buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 1 }), /Images/);
 });
 
 test("resume source has no Assembly create, update, or delete operation", async () => {
@@ -107,12 +119,13 @@ test("resume source never uses pluginassemblyidunique for an OData bind", async 
 });
 
 test("resume plan never plans enabled Steps", () => {
-  assert.equal(buildResumePlan({ assemblyCount: 1, pluginTypeCount: 0, stepCount: 0, imageCount: 0 }).plannedEnabledSteps, 0);
+  assert.equal(buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 0 }).plannedEnabledSteps, 0);
 });
 
 test("resume plan has the frozen child component counts", () => {
-  const plan = buildResumePlan({ assemblyCount: 1, pluginTypeCount: 0, stepCount: 0, imageCount: 0 });
+  const plan = buildResumePlan({ assemblyCount: 1, existingPluginTypeCount: 1, missingPluginTypeCount: 2, conflictingPluginTypeCount: 0, stepCount: 0, imageCount: 0 });
   assert.equal(plan.plannedPluginTypes, 3);
+  assert.equal(plan.plannedPluginTypeCreates, 2);
   assert.equal(plan.plannedSteps, 7);
   assert.equal(plan.plannedImages, 6);
 });
@@ -132,4 +145,68 @@ test("frozen primary Assembly ID is a normal Dataverse GUID", () => {
   const payload = buildPluginTypePayload({ typename: "Example", name: "Example", friendlyName: "Example Friendly" }, primaryAssemblyId);
   assert.equal(payload["pluginassemblyid@odata.bind"].includes(uniqueAssemblyId), false);
   assert.equal(payload["pluginassemblyid@odata.bind"].includes(pluginTypeId), false);
+});
+
+test("read-after-write retries a transient missing GET without another POST", async () => {
+  let calls = 0;
+  const result = await readAfterWriteById(async () => {
+    calls += 1;
+    return calls === 2 ? { plugintypeid: pluginTypeId } : { value: [] };
+  }, "/plugintypes/id", "type", { delays: [0, 0], sleep: async () => {} });
+  assert.equal(calls, 2);
+  assert.equal(result.row.plugintypeid, pluginTypeId);
+  assert.equal(result.delayed, true);
+});
+
+test("read-after-write allows five attempts then returns unresolved", async () => {
+  let calls = 0;
+  const result = await readAfterWriteById(async () => { calls += 1; return { value: [] }; }, "/plugintypes/id", "type", { delays: [0, 0, 0, 0, 0], sleep: async () => {} });
+  assert.equal(calls, 5);
+  assert.equal(result.row, null);
+});
+
+test("five delayed ID reads fall back to an exact collection match without reposting", async () => {
+  let idReads = 0;
+  let collectionReads = 0;
+  const definition = { typename: "TypeB", name: "NameB", friendlyName: "Friendly B" };
+  const result = await resolvePluginTypeAfterWrite(async (endpoint) => {
+    if (endpoint.includes("plugintypes(")) {
+      idReads += 1;
+      return { value: [] };
+    }
+    collectionReads += 1;
+    return { value: [{ plugintypeid: pluginTypeId, typename: definition.typename, name: definition.name, friendlyname: definition.friendlyName, _pluginassemblyid_value: primaryAssemblyId }] };
+  }, pluginTypeId, definition, primaryAssemblyId, { delays: [0, 0, 0, 0, 0], sleep: async () => {} });
+  assert.equal(idReads, 5);
+  assert.equal(collectionReads, 1);
+  assert.equal(result.status, "created-after-read-delay");
+  assert.equal(result.row.plugintypeid, pluginTypeId);
+});
+
+test("duplicate recovery reuses only an exact Plugin Type match", async () => {
+  const definition = { typename: "TypeB", name: "NameB", friendlyName: "Friendly B" };
+  const exact = await findPluginTypeByDefinition(async () => ({ value: [{ plugintypeid: pluginTypeId, typename: definition.typename, name: definition.name, friendlyname: definition.friendlyName, _pluginassemblyid_value: primaryAssemblyId }] }), definition, primaryAssemblyId);
+  assert.equal(exact.plugintypeid, pluginTypeId);
+  await assert.rejects(() => findPluginTypeByDefinition(async () => ({ value: [{ plugintypeid: pluginTypeId, typename: definition.typename, name: "Wrong", friendlyname: definition.friendlyName, _pluginassemblyid_value: primaryAssemblyId }] }), definition, primaryAssemblyId), /conflict/);
+});
+
+test("partial Plugin Type classification reuses exact matches and creates only missing definitions", () => {
+  const definitions = [
+    { typename: "TypeA", name: "NameA", friendlyName: "Friendly A" },
+    { typename: "TypeB", name: "NameB", friendlyName: "Friendly B" },
+    { typename: "TypeC", name: "NameC", friendlyName: "Friendly C" },
+  ];
+  const rows = [{ plugintypeid: pluginTypeId, typename: "TypeA", name: "NameA", friendlyname: "Friendly A", _pluginassemblyid_value: primaryAssemblyId }];
+  const result = classifyPluginTypes(definitions, rows, primaryAssemblyId);
+  assert.equal(result.existing.length, 1);
+  assert.equal(result.missing.length, 2);
+  assert.equal(result.conflicting.length, 0);
+});
+
+test("partial Plugin Type classification blocks a conflicting existing definition", () => {
+  const definitions = [{ typename: "TypeA", name: "NameA", friendlyName: "Friendly A" }, { typename: "TypeB", name: "NameB", friendlyName: "Friendly B" }, { typename: "TypeC", name: "NameC", friendlyName: "Friendly C" }];
+  const rows = [{ plugintypeid: pluginTypeId, typename: "TypeA", name: "WrongName", friendlyname: "Friendly A", _pluginassemblyid_value: primaryAssemblyId }];
+  const result = classifyPluginTypes(definitions, rows, primaryAssemblyId);
+  assert.equal(result.conflicting.length, 1);
+  assert.equal(result.missing.length, 2);
 });

@@ -23,6 +23,7 @@ const EXPECTED_PLUGIN_TYPE_NAMES = [
   "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
   "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
 ];
+const READ_AFTER_WRITE_DELAYS_MS = [1000, 2000, 3000, 5000, 8000];
 
 const isGuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
 const stamp = () => new Date().toISOString().replace(/[-:.]/g, "").replace(/Z$/, "Z");
@@ -75,6 +76,66 @@ async function querySingle(get, endpoint, description) {
   return rows[0];
 }
 
+async function readAfterWriteById(get, endpoint, description, { delays = READ_AFTER_WRITE_DELAYS_MS, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  let attempts = 0;
+  for (const delay of delays) {
+    if (delay > 0) await sleep(delay);
+    attempts += 1;
+    try {
+      const body = await get(endpoint);
+      const row = Array.isArray(body.value) ? (body.value.length === 1 ? body.value[0] : null) : body;
+      if (row && typeof row === "object" && Object.keys(row).length > 0) return { row, attempts, delayed: attempts > 1 };
+    } catch (error) {
+      if (Number(error?.status) !== 404) throw error;
+    }
+  }
+  return { row: null, attempts, delayed: false, description };
+}
+
+function classifyPluginTypes(definitions, rows, assemblyId) {
+  const existing = [];
+  const missing = [];
+  const conflicting = [];
+  for (const definition of definitions) {
+    const matches = rows.filter((row) => row.typename === definition.typename);
+    const exact = matches.filter((row) => row.name === definition.name
+      && row.friendlyname === definition.friendlyName
+      && lower(row._pluginassemblyid_value) === lower(assemblyId));
+    if (matches.length === 0) {
+      missing.push(definition);
+    } else if (matches.length === 1 && exact.length === 1) {
+      existing.push({ definition, row: matches[0] });
+    } else {
+      conflicting.push({ definition, rows: matches });
+    }
+  }
+  return { existing, missing, conflicting };
+}
+
+async function findPluginTypeByDefinition(get, definition, assemblyId) {
+  const rows = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=typename eq '${escapeODataString(definition.typename)}'`)).value || [];
+  const exact = rows.filter((row) => row.name === definition.name && row.friendlyname === definition.friendlyName && lower(row._pluginassemblyid_value) === lower(assemblyId));
+  if (rows.length > 1 || (rows.length === 1 && exact.length !== 1)) throw new Error(`Blocked: Plugin Type conflict for ${definition.typename}.`);
+  return exact[0] || null;
+}
+
+async function resolvePluginTypeAfterWrite(get, id, definition, assemblyId, options = {}) {
+  const result = await readAfterWriteById(get, `/api/data/v9.2/plugintypes(${id})?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value`, `Plugin Type ${definition.typename}`, options);
+  if (result.row) return { row: result.row, status: "created", readAfterWrite: result };
+  const collectionRow = await findPluginTypeByDefinition(get, definition, assemblyId);
+  return { row: collectionRow, status: collectionRow ? "created-after-read-delay" : null, readAfterWrite: result };
+}
+
+function recordReadAfterWrite(audit, kind, label, result) {
+  audit.readAfterWrite.totalAttempts += result.attempts;
+  if (result.delayed) audit.readAfterWrite.delayedVerifications += 1;
+  audit.readAfterWrite.records.push({ kind, label, attempts: result.attempts, delayed: result.delayed });
+}
+
+function escapeODataString(value) {
+  return String(value).replaceAll("'", "''");
+}
+
 function buildStepPayload(step, messageId, filterId, pluginTypeId) {
   const payload = {
     name: step.displayName,
@@ -123,9 +184,13 @@ function buildPluginTypePayload(definition, assemblyId) {
   };
 }
 
-function buildResumePlan({ assemblyCount, pluginTypeCount, stepCount, imageCount }) {
+function buildResumePlan({ assemblyCount, existingPluginTypeCount, missingPluginTypeCount, conflictingPluginTypeCount, stepCount, imageCount }) {
   assert(assemblyCount === 1, `Resume requires exactly one existing Assembly, got ${assemblyCount}.`);
-  assert(pluginTypeCount === 0, `Resume requires zero existing matching Plugin Types, got ${pluginTypeCount}.`);
+  assert(Number.isInteger(existingPluginTypeCount) && existingPluginTypeCount >= 0, "Resume requires an existing Plugin Type count.");
+  assert(Number.isInteger(missingPluginTypeCount) && missingPluginTypeCount >= 0, "Resume requires a missing Plugin Type count.");
+  assert(Number.isInteger(conflictingPluginTypeCount) && conflictingPluginTypeCount >= 0, "Resume requires a conflicting Plugin Type count.");
+  assert(conflictingPluginTypeCount === 0, `Blocked: conflicting Plugin Types=${conflictingPluginTypeCount}.`);
+  assert(existingPluginTypeCount + missingPluginTypeCount === 3, "Resume Plugin Type classification must account for all three definitions.");
   assert(stepCount === 0, `Resume requires zero existing matching Steps, got ${stepCount}.`);
   assert(imageCount === 0, `Resume requires zero existing matching Images, got ${imageCount}.`);
   return {
@@ -134,6 +199,9 @@ function buildResumePlan({ assemblyCount, pluginTypeCount, stepCount, imageCount
     updateAssembly: false,
     deleteAssembly: false,
     plannedPluginTypes: 3,
+    plannedPluginTypeCreates: missingPluginTypeCount,
+    plannedPluginTypeUpdates: 0,
+    plannedPluginTypeDeletes: 0,
     plannedSteps: 7,
     plannedImages: 6,
     plannedEnabledSteps: 0,
@@ -182,7 +250,7 @@ export async function main(argv = process.argv.slice(2)) {
   const auditDir = path.join(ROOT, "local-artifacts/d365/plugin-registration", `phase1c5r2d1_${stamp()}`);
   await fs.mkdir(auditDir, { recursive: true });
   const audit = {
-    phase: "1C-5R2D-1B",
+    phase: "1C-5R2D-1D",
     startedAtUtc: new Date().toISOString(),
     targetEnvironment: null,
     organizationName: ORG_NAME,
@@ -193,6 +261,7 @@ export async function main(argv = process.argv.slice(2)) {
     writeRequests: 0,
     writeCounts: { pluginAssemblyPost: 0, pluginTypePost: 0, stepPost: 0, stepPatch: 0, imagePost: 0, solutionComponentPost: 0 },
     errors: [],
+    readAfterWrite: { totalAttempts: 0, delayedVerifications: 0, records: [] },
     expected: { pluginTypes: pluginTypeDefinitions, steps: manifest.steps.map((step) => step.logicalIdentifier), images: manifest.steps.flatMap((step) => step.images.map((image) => `${step.logicalIdentifier}:${image.name}`)) },
     actual: { pluginAssembly: null, pluginTypes: [], steps: [], images: [], solutionComponents: [] },
     publishExecuted: false,
@@ -246,18 +315,38 @@ export async function main(argv = process.argv.slice(2)) {
     assert(publisher.customizationprefix === PUBLISHER_PREFIX, "Publisher prefix safety gate failed.");
     audit.solutionId = solution.solutionid;
 
-    const assemblyRows = (await get(`/api/data/v9.2/pluginassemblies?$select=pluginassemblyid,pluginassemblyidunique,name,version,publickeytoken,isolationmode,sourcetype,ismanaged&$filter=name eq '${ASSEMBLY_NAME}'`)).value || [];
-    const typeRows = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=${expectedPluginTypeNames.map((name) => `typename eq '${name}'`).join(" or ")}`)).value || [];
-    const stepRows = (await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value&$filter=${manifest.steps.map((step) => `name eq '${step.displayName}'`).join(" or ")}`)).value || [];
+    const assemblyRows = (await get(`/api/data/v9.2/pluginassemblies?$select=pluginassemblyid,pluginassemblyidunique,name,version,publickeytoken,isolationmode,sourcetype,ismanaged&$filter=name eq '${escapeODataString(ASSEMBLY_NAME)}'`)).value || [];
+    const typeRows = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=${expectedPluginTypeNames.map((name) => `typename eq '${escapeODataString(name)}'`).join(" or ")}`)).value || [];
+    const stepRows = (await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value&$filter=${manifest.steps.map((step) => `name eq '${escapeODataString(step.displayName)}'`).join(" or ")}`)).value || [];
+    // Image names are not globally unique in Dataverse. With zero target Steps,
+    // no existing Image can be a child of this registration attempt.
+    const imageRows = [];
     assert(assemblyRows.length === 1, `Resume requires exactly one matching Plugin Assembly, got ${assemblyRows.length}.`);
-    assert(typeRows.length === 0, `Blocked: existing matching Plugin Type count=${typeRows.length}.`);
     assert(stepRows.length === 0, `Blocked: existing matching Step count=${stepRows.length}.`);
-    const resumePlan = buildResumePlan({ assemblyCount: assemblyRows.length, pluginTypeCount: typeRows.length, stepCount: stepRows.length, imageCount: 0 });
+    assert(imageRows.length === 0, `Blocked: existing matching Image count=${imageRows.length}.`);
+    const assemblyId = assemblyRows[0].pluginassemblyid;
+    const typeClassification = classifyPluginTypes(pluginTypeDefinitions, typeRows, assemblyId);
+    assert(typeClassification.conflicting.length === 0, `Blocked: conflicting Plugin Types=${typeClassification.conflicting.length}.`);
+    const resumePlan = buildResumePlan({
+      assemblyCount: assemblyRows.length,
+      existingPluginTypeCount: typeClassification.existing.length,
+      missingPluginTypeCount: typeClassification.missing.length,
+      conflictingPluginTypeCount: typeClassification.conflicting.length,
+      stepCount: stepRows.length,
+      imageCount: imageRows.length,
+    });
     audit.plan = resumePlan;
-    audit.preflight = { existingAssemblyCount: assemblyRows.length, existingPluginTypeCount: typeRows.length, existingStepCount: stepRows.length, existingMatchingImageCount: 0, assembly: { pluginassemblyid: assemblyRows[0].pluginassemblyid, pluginassemblyidunique: assemblyRows[0].pluginassemblyidunique, name: assemblyRows[0].name, version: assemblyRows[0].version, publickeytoken: assemblyRows[0].publickeytoken, isolationmode: assemblyRows[0].isolationmode, sourcetype: assemblyRows[0].sourcetype, ismanaged: assemblyRows[0].ismanaged } };
+    audit.preflight = {
+      existingAssemblyCount: assemblyRows.length,
+      existingPluginTypes: typeClassification.existing.map(({ definition, row }) => ({ definition, id: row.plugintypeid, assemblyLookup: row._pluginassemblyid_value })),
+      missingPluginTypes: typeClassification.missing,
+      conflictingPluginTypes: typeClassification.conflicting,
+      existingStepCount: stepRows.length,
+      existingMatchingImageCount: imageRows.length,
+      assembly: { pluginassemblyid: assemblyRows[0].pluginassemblyid, pluginassemblyidunique: assemblyRows[0].pluginassemblyidunique, name: assemblyRows[0].name, version: assemblyRows[0].version, publickeytoken: assemblyRows[0].publickeytoken, isolationmode: assemblyRows[0].isolationmode, sourcetype: assemblyRows[0].sourcetype, ismanaged: assemblyRows[0].ismanaged },
+    };
     assert(isGuid(assemblyRows[0].pluginassemblyid), "Existing Assembly primary pluginassemblyid is invalid.");
     assert(assemblyRows[0].name === ASSEMBLY_NAME && assemblyRows[0].publickeytoken === EXPECTED_TOKEN && Number(assemblyRows[0].isolationmode) === 2 && Number(assemblyRows[0].sourcetype) === 0 && assemblyRows[0].ismanaged === false, "Existing Assembly identity does not match the frozen artifact.");
-    const assemblyId = assemblyRows[0].pluginassemblyid;
     audit.actual.pluginAssembly = { id: assemblyId, pluginassemblyidunique: assemblyRows[0].pluginassemblyidunique, status: "reused_existing_assembly" };
 
     const messages = (await get("/api/data/v9.2/sdkmessages?$select=sdkmessageid,name&$filter=name eq 'Create' or name eq 'Update' or name eq 'Delete'")).value || [];
@@ -271,22 +360,39 @@ export async function main(argv = process.argv.slice(2)) {
       audit.status = "dry-run";
       audit.completedAtUtc = new Date().toISOString();
       await saveAudit("resume-dry-run.json");
-      console.log(JSON.stringify({ status: "dry-run", auditDir, existingAssemblyId: assemblyId, plan: resumePlan, preflight: audit.preflight, readRequests: audit.readRequests, writeRequests: 0 }, null, 2));
+      console.log(JSON.stringify({ status: "dry-run", auditDir, existingAssemblyId: assemblyId, plan: resumePlan, existingPluginTypes: typeClassification.existing.length, missingPluginTypes: typeClassification.missing.length, conflictingPluginTypes: typeClassification.conflicting.length, preflight: audit.preflight, readRequests: audit.readRequests, writeRequests: 0, networkRequests: audit.readRequests, writesExecuted: false }, null, 2));
       return;
     }
 
-    let pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
-    if (pluginTypes.length === 0) {
-      for (const definition of pluginTypeDefinitions) {
-        const response = await post("/api/data/v9.2/plugintypes", buildPluginTypePayload(definition, assemblyId), "pluginTypePost");
-        const id = extractId(response, "plugintype");
-        const created = await querySingle(get, `/api/data/v9.2/plugintypes(${id})?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value`, `Plugin Type ${definition.typename}`);
-        assert(created.typename === definition.typename && created.name === definition.name && created.friendlyname === definition.friendlyName && lower(created._pluginassemblyid_value) === lower(assemblyId), `Plugin Type readback mismatch for ${definition.typename}.`);
-        audit.actual.pluginTypes.push({ id, typename: created.typename, name: created.name, friendlyname: created.friendlyname, assemblyLookup: created._pluginassemblyid_value, status: "created" });
+    let pluginTypes = typeClassification.existing.map(({ row }) => row);
+    audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, name: type.name, friendlyname: type.friendlyname, assemblyLookup: type._pluginassemblyid_value, status: "existing-and-matching" }));
+    const verifyTypeDefinition = (row, definition) => {
+      assert(row.typename === definition.typename && row.name === definition.name && row.friendlyname === definition.friendlyName && lower(row._pluginassemblyid_value) === lower(assemblyId), `Plugin Type readback mismatch for ${definition.typename}.`);
+    };
+    for (const definition of typeClassification.missing) {
+      let response;
+      let status = "created";
+      try {
+        response = await post("/api/data/v9.2/plugintypes", buildPluginTypePayload(definition, assemblyId), "pluginTypePost");
+      } catch (error) {
+        const recovered = await findPluginTypeByDefinition(get, definition, assemblyId);
+        if (recovered) {
+          status = error.status === 409 ? "reused-after-duplicate" : "created-after-post-error";
+          pluginTypes.push(recovered);
+          audit.actual.pluginTypes.push({ id: recovered.plugintypeid, typename: recovered.typename, name: recovered.name, friendlyname: recovered.friendlyname, assemblyLookup: recovered._pluginassemblyid_value, status });
+          continue;
+        }
+        throw error;
       }
-      pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
-    } else {
-      audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, name: type.name, friendlyname: type.friendlyname, assemblyLookup: type._pluginassemblyid_value, status: "alreadyCreatedByAssembly" }));
+      const id = extractId(response, "plugintype");
+      const resolved = await resolvePluginTypeAfterWrite(get, id, definition, assemblyId);
+      recordReadAfterWrite(audit, "PluginType", definition.typename, resolved.readAfterWrite);
+      const created = resolved.row;
+      if (resolved.status) status = resolved.status;
+      assert(created, `Plugin Type ${definition.typename} was not visible after read-after-write retry; no POST retry was attempted.`);
+      verifyTypeDefinition(created, definition);
+      pluginTypes.push(created);
+      audit.actual.pluginTypes.push({ id: created.plugintypeid, typename: created.typename, name: created.name, friendlyname: created.friendlyname, assemblyLookup: created._pluginassemblyid_value, status });
     }
     assert(pluginTypes.length === pluginTypeDefinitions.length, `Blocked: expected 3 Plugin Types, got ${pluginTypes.length}.`);
     assert(unique(pluginTypes.map((type) => type.typename)).sort().join("|") === expectedPluginTypeNames.slice().sort().join("|"), "Plugin Type names mismatch after assembly registration.");
@@ -308,10 +414,16 @@ export async function main(argv = process.argv.slice(2)) {
         throw error;
       }
       const stepId = extractId(response, "sdkmessageprocessingstep");
-      let verified = (await querySingle(get, `/api/data/v9.2/sdkmessageprocessingsteps(${stepId})?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value`, `step ${step.logicalIdentifier}`));
+      let result = await readAfterWriteById(get, `/api/data/v9.2/sdkmessageprocessingsteps(${stepId})?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value`, `step ${step.logicalIdentifier}`);
+      recordReadAfterWrite(audit, "Step", step.logicalIdentifier, result);
+      let verified = result.row;
+      assert(verified, `Step ${step.logicalIdentifier} was not visible after read-after-write retry; no POST retry was attempted.`);
       if (!(Number(verified.statecode) === 1 && Number(verified.statuscode) === 2)) {
         await patch(`/api/data/v9.2/sdkmessageprocessingsteps(${stepId})`, { statecode: 1, statuscode: 2 }, "stepPatch");
-        verified = await querySingle(get, `/api/data/v9.2/sdkmessageprocessingsteps(${stepId})?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value`, `disabled step ${step.logicalIdentifier}`);
+        result = await readAfterWriteById(get, `/api/data/v9.2/sdkmessageprocessingsteps(${stepId})?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value`, `disabled step ${step.logicalIdentifier}`);
+        recordReadAfterWrite(audit, "StepDisabled", step.logicalIdentifier, result);
+        verified = result.row;
+        assert(verified, `Disabled Step ${step.logicalIdentifier} was not visible after read-after-write retry.`);
       }
       assert(Number(verified.statecode) === 1 && Number(verified.statuscode) === 2, `Step ${step.logicalIdentifier} is not Disabled after create.`);
       stepIdByLogicalIdentifier[step.logicalIdentifier] = stepId;
@@ -330,7 +442,11 @@ export async function main(argv = process.argv.slice(2)) {
           throw error;
         }
         const imageId = extractId(response, "sdkmessageprocessingstepimage");
-        const imageRow = await querySingle(get, `/api/data/v9.2/sdkmessageprocessingstepimages(${imageId})?$select=sdkmessageprocessingstepimageid,name,entityalias,imagetype,attributes,messagepropertyname,_sdkmessageprocessingstepid_value`, `image ${step.logicalIdentifier}:${image.name}`);
+        const imageResult = await readAfterWriteById(get, `/api/data/v9.2/sdkmessageprocessingstepimages(${imageId})?$select=sdkmessageprocessingstepimageid,name,entityalias,imagetype,attributes,messagepropertyname,_sdkmessageprocessingstepid_value`, `image ${step.logicalIdentifier}:${image.name}`);
+        recordReadAfterWrite(audit, "Image", `${step.logicalIdentifier}:${image.name}`, imageResult);
+        const imageRow = imageResult.row;
+        assert(imageRow, `Image ${step.logicalIdentifier}:${image.name} was not visible after read-after-write retry; no POST retry was attempted.`);
+        assert(imageRow.name === image.name && imageRow.entityalias === image.alias && Number(imageRow.imagetype) === (image.type === "PreImage" ? 0 : 1) && imageRow.messagepropertyname === "Target" && lower(imageRow._sdkmessageprocessingstepid_value) === lower(stepId), `Image readback mismatch for ${step.logicalIdentifier}:${image.name}.`);
         audit.actual.images.push({ id: imageId, step: step.logicalIdentifier, name: imageRow.name, alias: imageRow.entityalias, imageType: imageRow.imagetype, attributes: imageRow.attributes, messagePropertyName: imageRow.messagepropertyname });
       }
     }
@@ -376,4 +492,4 @@ export async function main(argv = process.argv.slice(2)) {
 
 runDataverseCli(import.meta.url, main);
 
-export { buildPluginTypePayload, buildResumePlan, extractId, validatePluginTypeDefinitions };
+export { buildPluginTypePayload, buildResumePlan, classifyPluginTypes, extractId, findPluginTypeByDefinition, readAfterWriteById, resolvePluginTypeAfterWrite, validatePluginTypeDefinitions };
