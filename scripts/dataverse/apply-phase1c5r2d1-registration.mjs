@@ -548,10 +548,12 @@ export async function main(argv = process.argv.slice(2)) {
 
     const componentTargets = [
       { type: COMPONENT_TYPES.pluginAssembly, id: assemblyId, label: "pluginAssembly" },
-      ...pluginTypes.map((type) => ({ type: COMPONENT_TYPES.pluginType, id: type.plugintypeid, label: `pluginType:${type.typename}` })),
       ...Object.entries(stepIdByLogicalIdentifier).map(([logicalIdentifier, id]) => ({ type: COMPONENT_TYPES.step, id, label: `step:${logicalIdentifier}` })),
       ...audit.actual.images.map((image) => ({ type: COMPONENT_TYPES.image, id: image.id, label: `image:${image.step}:${image.name}` })),
     ];
+    const assemblyComponents = (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${COMPONENT_TYPES.pluginAssembly} and objectid eq ${assemblyId}`)).value || [];
+    assert(assemblyComponents.length === 1 && Number(assemblyComponents[0].rootcomponentbehavior) === 0, "Blocked: Plugin Assembly root must include subcomponents before Plugin Types can be considered contained.");
+    audit.actual.solutionComponents.push(...pluginTypes.map((type) => ({ component: `pluginType:${type.typename}`, componentId: type.plugintypeid, componentType: COMPONENT_TYPES.pluginType, status: "includedAsAssemblySubcomponent", rootSolutionComponentId: assemblyComponents[0].solutioncomponentid })));
     for (const component of componentTargets) {
       const existing = (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${component.type} and objectid eq ${component.id}`)).value || [];
       if (existing.length === 0) {
