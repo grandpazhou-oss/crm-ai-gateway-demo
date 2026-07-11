@@ -56,9 +56,9 @@ Do not include annual totals, GP, MP, status fields, `modifiedon`, or any `_base
 ### Images
 
 - PreValidation Update and PreOperation Update, alias `PreImage`: lookup, currency, child annual revenue, and the 12 monthly Revenue fields.
-- PostOperation Create, alias `PostImage`: lookup, currency, child annual revenue.
-- PostOperation Update, alias `PreImage`: lookup. Alias `PostImage`: lookup and child annual revenue.
-- PostOperation Delete, alias `PreImage`: lookup.
+- PostOperation Create, alias `PostImage`: the same complete Actual snapshot because `EntityMapper.ToActual` reads the full snapshot shape.
+- PostOperation Update, aliases `PreImage` and `PostImage`: the same complete Actual snapshot for old/new parent identification and reparent safety.
+- PostOperation Delete, alias `PreImage`: the same complete Actual snapshot; Target is unavailable after deletion.
 - Never select All Attributes.
 
 ## Offline Logic Review
