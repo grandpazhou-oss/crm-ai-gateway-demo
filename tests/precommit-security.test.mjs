@@ -33,7 +33,7 @@ test("Dataverse script inventory covers every executable script and write script
     if (writeScripts.has(file)) assert.match(source, /assertDataverseScriptGate\(\{ mode: "write-capable" \}\)/);
     if (file === "phase1a-full.mjs") assert.match(source, /assertDataverseScriptGate\(\{ mode: "publish\/deploy-capable" \}\)/);
   }
-  assert.equal(files.length, 32);
+  assert.equal(files.length, 33);
 });
 
 test("curated Opportunity schema contains unique project fields without environment export properties", async () => {
