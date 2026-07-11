@@ -1,0 +1,352 @@
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
+import { assertDataverseScriptGate, runDataverseCli } from "./lib/environment-safety.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const EXPECTED_TEST_HOSTNAME = ["org91f5f65f", "crm5", "dynamics", "com"].join(".");
+const ORG_NAME = "org91f5f65f";
+const SOLUTION = "CRMAIGatewayDemo";
+const SOLUTION_DISPLAY_NAME = "CRM AI Gateway Demo";
+const PUBLISHER_PREFIX = "aigw";
+const PRIMARY_ENTITY = "aigw_actualmanagement";
+const ASSEMBLY_NAME = "CrmAiGateway.ActualTotals.Plugin";
+const DLL_NAME = "CrmAiGateway.ActualTotals.Plugin.dll";
+const EXPECTED_TOKEN = "0350f79ae25dc991";
+const EXPECTED_SHA256 = "a02db984606827396467b7311f3024b586e33f4d3a024e3cb240e39ba91c6b7d";
+const MANIFEST_PATH = path.join(ROOT, "docs/d365/phase1c-5r2b-plugin-registration-manifest.json");
+const COMPONENT_TYPES = { pluginType: 90, pluginAssembly: 91, step: 92, image: 93 };
+const EXPECTED_PLUGIN_TYPES = [
+  "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
+  "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+  "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+];
+
+const isGuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
+const stamp = () => new Date().toISOString().replace(/[-:.]/g, "").replace(/Z$/, "Z");
+const lower = (value) => String(value || "").toLowerCase();
+const unique = (items) => [...new Set(items)];
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+function extractId(response, logicalName) {
+  const header = response?.headers?.get?.("odata-entityid") || response?.headers?.get?.("OData-EntityId") || "";
+  const headerMatch = /\(([0-9a-f-]{36})\)/i.exec(header);
+  const headerId = headerMatch?.[1] || null;
+  const primaryKey = `${logicalName}id`;
+  const bodyId = response?.body?.[primaryKey];
+  if (bodyId !== undefined && !isGuid(bodyId)) throw new Error(`Invalid ${primaryKey} in Dataverse create response.`);
+  if (headerId && bodyId && lower(headerId) !== lower(bodyId)) throw new Error(`${primaryKey} differs between OData-EntityId and response body.`);
+  if (headerId) return headerId;
+  if (bodyId) return bodyId;
+  throw new Error(`No ${primaryKey} returned by Dataverse create response; unique IDs are not valid substitutes.`);
+}
+
+function errorSummary(error) {
+  return {
+    status: error?.status ?? null,
+    message: error?.message || "Unknown Dataverse error",
+    code: error?.body?.error?.code || null,
+  };
+}
+
+function responseSummary(response) {
+  return {
+    status: response?.status ?? null,
+    id: Object.entries(response?.body || {}).find(([key, value]) => (key === "id" || key.toLowerCase().endsWith("id")) && isGuid(value))?.[1] || null,
+    entityIdHeaderPresent: Boolean(response?.headers?.get?.("odata-entityid") || response?.headers?.get?.("OData-EntityId")),
+  };
+}
+
+async function readJson(file) {
+  return JSON.parse(await fs.readFile(file, "utf8"));
+}
+
+async function sha256(file) {
+  const data = await fs.readFile(file);
+  return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+async function querySingle(get, endpoint, description) {
+  const body = await get(endpoint);
+  const rows = Array.isArray(body.value) ? body.value : [];
+  assert(rows.length === 1, `${description} expected exactly one row, got ${rows.length}`);
+  return rows[0];
+}
+
+function buildStepPayload(step, messageId, filterId, pluginTypeId) {
+  const payload = {
+    name: step.displayName,
+    description: step.businessPurpose,
+    stage: step.stage,
+    mode: step.mode,
+    rank: step.rank,
+    supporteddeployment: step.deploymentCode,
+    statuscode: 2,
+    asyncautodelete: false,
+    canbebypassed: false,
+    "sdkmessageid@odata.bind": `/sdkmessages(${messageId})`,
+    "sdkmessagefilterid@odata.bind": `/sdkmessagefilters(${filterId})`,
+    "plugintypeid@odata.bind": `/plugintypes(${pluginTypeId})`,
+    "eventhandler_plugintype@odata.bind": `/plugintypes(${pluginTypeId})`,
+  };
+  if (Array.isArray(step.filteringAttributes)) payload.filteringattributes = step.filteringAttributes.join(",");
+  return payload;
+}
+
+function buildPluginTypePayload(typename, assemblyId) {
+  assert(isGuid(assemblyId), "Plugin Type binding requires the primary pluginassemblyid.");
+  return { typename, "pluginassemblyid@odata.bind": `/pluginassemblies(${assemblyId})` };
+}
+
+function buildResumePlan({ assemblyCount, pluginTypeCount, stepCount, imageCount }) {
+  assert(assemblyCount === 1, `Resume requires exactly one existing Assembly, got ${assemblyCount}.`);
+  assert(pluginTypeCount === 0, `Resume requires zero existing matching Plugin Types, got ${pluginTypeCount}.`);
+  assert(stepCount === 0, `Resume requires zero existing matching Steps, got ${stepCount}.`);
+  assert(imageCount === 0, `Resume requires zero existing matching Images, got ${imageCount}.`);
+  return {
+    resumeExistingAssembly: true,
+    createAssembly: false,
+    updateAssembly: false,
+    deleteAssembly: false,
+    plannedPluginTypes: EXPECTED_PLUGIN_TYPES.length,
+    plannedSteps: 7,
+    plannedImages: 6,
+    plannedEnabledSteps: 0,
+  };
+}
+
+function buildImagePayload(image, stepId) {
+  return {
+    name: image.name,
+    entityalias: image.alias,
+    imagetype: image.type === "PreImage" ? 0 : 1,
+    attributes: image.fields.join(","),
+    messagepropertyname: "Target",
+    "sdkmessageprocessingstepid@odata.bind": `/sdkmessageprocessingsteps(${stepId})`,
+  };
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const resumeExistingAssembly = argv.includes("--resume-existing-assembly");
+  assert(resumeExistingAssembly, "Resume-only executor requires --resume-existing-assembly; no Assembly create path is available.");
+  const dryRun = argv.includes("--dry-run");
+  if (!dryRun) assert(argv.includes("--confirm-phase1c5r2d1"), "Missing --confirm-phase1c5r2d1; no Dataverse writes were attempted.");
+  const gate = dryRun
+    ? assertDataverseScriptGate({ mode: "read-only", argv })
+    : assertDataverseScriptGate({ mode: "write-capable" });
+  const manifest = await readJson(MANIFEST_PATH);
+  assert(manifest.solution === SOLUTION && manifest.primaryEntity === PRIMARY_ENTITY, "Registration manifest target mismatch.");
+  assert(manifest.pluginTypes?.length === 3 && manifest.steps?.length === 7, "Registration manifest must contain 3 Plugin Types and 7 Steps.");
+  assert(manifest.artifact?.publicKeyToken === EXPECTED_TOKEN, "Manifest public key token mismatch.");
+  assert(manifest.artifact?.sha256 === EXPECTED_SHA256, "Manifest DLL SHA-256 mismatch.");
+  assert(manifest.artifact?.source && !path.isAbsolute(manifest.artifact.source), "Artifact source must be a project-relative path.");
+
+  const artifactPath = path.resolve(ROOT, manifest.artifact.source);
+  assert(await sha256(artifactPath) === EXPECTED_SHA256, "Frozen DLL SHA-256 mismatch.");
+  const [buildManifest, assemblyInspection] = await Promise.all([
+    readJson(path.join(path.dirname(artifactPath), "build-manifest.json")),
+    readJson(path.join(path.dirname(artifactPath), "assembly-inspection.json")),
+  ]);
+  assert(buildManifest.deployable === true, "Frozen build manifest is not deployable.");
+  assert(buildManifest.publicKeyToken === EXPECTED_TOKEN && assemblyInspection.publicKeyToken === EXPECTED_TOKEN, "Frozen public key token mismatch.");
+  assert(assemblyInspection.assemblyName === ASSEMBLY_NAME && assemblyInspection.passed === true, "Frozen assembly inspection failed.");
+  assert(unique(assemblyInspection.expectedPluginTypes || []).sort().join("|") === EXPECTED_PLUGIN_TYPES.slice().sort().join("|"), "Frozen plugin type list mismatch.");
+
+  const auditDir = path.join(ROOT, "local-artifacts/d365/plugin-registration", `phase1c5r2d1_${stamp()}`);
+  await fs.mkdir(auditDir, { recursive: true });
+  const audit = {
+    phase: "1C-5R2D-1B",
+    startedAtUtc: new Date().toISOString(),
+    targetEnvironment: null,
+    organizationName: ORG_NAME,
+    solution: SOLUTION,
+    publisherPrefix: PUBLISHER_PREFIX,
+    dll: { file: DLL_NAME, sha256: EXPECTED_SHA256, publicKeyToken: EXPECTED_TOKEN },
+    readRequests: 0,
+    writeRequests: 0,
+    writeCounts: { pluginAssemblyPost: 0, pluginTypePost: 0, stepPost: 0, stepPatch: 0, imagePost: 0, solutionComponentPost: 0 },
+    errors: [],
+    expected: { pluginTypes: EXPECTED_PLUGIN_TYPES, steps: manifest.steps.map((step) => step.logicalIdentifier), images: manifest.steps.flatMap((step) => step.images.map((image) => `${step.logicalIdentifier}:${image.name}`)) },
+    actual: { pluginAssembly: null, pluginTypes: [], steps: [], images: [], solutionComponents: [] },
+    publishExecuted: false,
+    businessDataWrites: 0,
+    productionRequests: 0,
+    rollback: { automaticDeletion: false, requiresSeparateAuthorization: true },
+    resumeExistingAssembly,
+    createAssembly: false,
+    updateAssembly: false,
+    deleteAssembly: false,
+  };
+  const saveAudit = async (name = "registration-audit.json") => fs.writeFile(path.join(auditDir, name), JSON.stringify(audit, null, 2));
+
+  const client = createDynamicsClient();
+  const config = client.config;
+  assert(new URL(config.dataverseUrl).hostname === EXPECTED_TEST_HOSTNAME, "Safety gate failed: target hostname is not the approved test environment.");
+  audit.targetEnvironment = gate.dataverseUrl;
+  assert((process.env.AI_PROVIDER || "demo") === "demo", "Safety gate failed: AI_PROVIDER must be demo.");
+  assert((process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() === "false", "Safety gate failed: ALLOW_EXTERNAL_AI must be false.");
+  const get = async (endpoint) => { audit.readRequests += 1; return (await client.dataverseGet(endpoint)).body; };
+  const post = async (endpoint, payload, kind, headers = { "MSCRM.SolutionUniqueName": SOLUTION }) => {
+    audit.writeRequests += 1;
+    audit.writeCounts[kind] += 1;
+    try {
+      const response = await client.dataversePost(endpoint, payload, { headers });
+      return response;
+    } catch (error) {
+      audit.errors.push({ operation: "POST", endpoint, kind, error: errorSummary(error) });
+      throw error;
+    }
+  };
+  const patch = async (endpoint, payload, kind) => {
+    audit.writeRequests += 1;
+    audit.writeCounts[kind] += 1;
+    try {
+      return await client.dataversePatch(endpoint, payload);
+    } catch (error) {
+      audit.errors.push({ operation: "PATCH", endpoint, kind, error: errorSummary(error) });
+      throw error;
+    }
+  };
+
+  try {
+    const who = await client.testConnection();
+    audit.identity = { whoAmI: who.ok === true };
+    const org = await querySingle(get, "/api/data/v9.2/organizations?$select=name,organizationid", "organization");
+    assert(org.name === ORG_NAME, `Organization mismatch: ${org.name}`);
+    const solution = await querySingle(get, `/api/data/v9.2/solutions?$select=solutionid,friendlyname,uniquename,ismanaged,_publisherid_value&$filter=uniquename eq '${SOLUTION}'`, "solution");
+    assert(solution.friendlyname === SOLUTION_DISPLAY_NAME && solution.uniquename === SOLUTION && solution.ismanaged === false, "Solution safety gate failed.");
+    const publisher = await get(`/api/data/v9.2/publishers(${solution._publisherid_value})?$select=customizationprefix`);
+    assert(publisher.customizationprefix === PUBLISHER_PREFIX, "Publisher prefix safety gate failed.");
+    audit.solutionId = solution.solutionid;
+
+    const assemblyRows = (await get(`/api/data/v9.2/pluginassemblies?$select=pluginassemblyid,pluginassemblyidunique,name,version,publickeytoken,isolationmode,sourcetype,ismanaged&$filter=name eq '${ASSEMBLY_NAME}'`)).value || [];
+    const typeRows = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=${EXPECTED_PLUGIN_TYPES.map((name) => `typename eq '${name}'`).join(" or ")}`)).value || [];
+    const stepRows = (await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value&$filter=${manifest.steps.map((step) => `name eq '${step.displayName}'`).join(" or ")}`)).value || [];
+    assert(assemblyRows.length === 1, `Resume requires exactly one matching Plugin Assembly, got ${assemblyRows.length}.`);
+    assert(typeRows.length === 0, `Blocked: existing matching Plugin Type count=${typeRows.length}.`);
+    assert(stepRows.length === 0, `Blocked: existing matching Step count=${stepRows.length}.`);
+    const resumePlan = buildResumePlan({ assemblyCount: assemblyRows.length, pluginTypeCount: typeRows.length, stepCount: stepRows.length, imageCount: 0 });
+    audit.plan = resumePlan;
+    audit.preflight = { existingAssemblyCount: assemblyRows.length, existingPluginTypeCount: typeRows.length, existingStepCount: stepRows.length, existingMatchingImageCount: 0, assembly: { pluginassemblyid: assemblyRows[0].pluginassemblyid, pluginassemblyidunique: assemblyRows[0].pluginassemblyidunique, name: assemblyRows[0].name, version: assemblyRows[0].version, publickeytoken: assemblyRows[0].publickeytoken, isolationmode: assemblyRows[0].isolationmode, sourcetype: assemblyRows[0].sourcetype, ismanaged: assemblyRows[0].ismanaged } };
+    assert(isGuid(assemblyRows[0].pluginassemblyid), "Existing Assembly primary pluginassemblyid is invalid.");
+    assert(assemblyRows[0].name === ASSEMBLY_NAME && assemblyRows[0].publickeytoken === EXPECTED_TOKEN && Number(assemblyRows[0].isolationmode) === 2 && Number(assemblyRows[0].sourcetype) === 0 && assemblyRows[0].ismanaged === false, "Existing Assembly identity does not match the frozen artifact.");
+    const assemblyId = assemblyRows[0].pluginassemblyid;
+    audit.actual.pluginAssembly = { id: assemblyId, pluginassemblyidunique: assemblyRows[0].pluginassemblyidunique, status: "reused_existing_assembly" };
+
+    const messages = (await get("/api/data/v9.2/sdkmessages?$select=sdkmessageid,name&$filter=name eq 'Create' or name eq 'Update' or name eq 'Delete'")).value || [];
+    const messageByName = Object.fromEntries(messages.map((message) => [message.name, message.sdkmessageid]));
+    assert(["Create", "Update", "Delete"].every((name) => isGuid(messageByName[name])), "Required SDK messages are unavailable.");
+    const filters = (await get(`/api/data/v9.2/sdkmessagefilters?$select=sdkmessagefilterid,primaryobjecttypecode,_sdkmessageid_value&$filter=primaryobjecttypecode eq '${PRIMARY_ENTITY}'`)).value || [];
+    const filterByMessageId = Object.fromEntries(filters.map((filter) => [filter._sdkmessageid_value, filter.sdkmessagefilterid]));
+    assert(["Create", "Update", "Delete"].every((name) => isGuid(filterByMessageId[messageByName[name]])), "Required SDK Message Filters are unavailable.");
+
+    if (dryRun) {
+      audit.status = "dry-run";
+      audit.completedAtUtc = new Date().toISOString();
+      await saveAudit("resume-dry-run.json");
+      console.log(JSON.stringify({ status: "dry-run", auditDir, existingAssemblyId: assemblyId, plan: resumePlan, preflight: audit.preflight, readRequests: audit.readRequests, writeRequests: 0 }, null, 2));
+      return;
+    }
+
+    let pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
+    if (pluginTypes.length === 0) {
+      for (const typename of EXPECTED_PLUGIN_TYPES) {
+        const response = await post("/api/data/v9.2/plugintypes", buildPluginTypePayload(typename, assemblyId), "pluginTypePost");
+        const id = extractId(response, "plugintype");
+        audit.actual.pluginTypes.push({ id, typename, status: "created" });
+      }
+      pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
+    } else {
+      audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, status: "alreadyCreatedByAssembly" }));
+    }
+    assert(pluginTypes.length === EXPECTED_PLUGIN_TYPES.length, `Blocked: expected 3 Plugin Types, got ${pluginTypes.length}.`);
+    assert(unique(pluginTypes.map((type) => type.typename)).sort().join("|") === EXPECTED_PLUGIN_TYPES.slice().sort().join("|"), "Plugin Type names mismatch after assembly registration.");
+    const pluginTypeByName = Object.fromEntries(pluginTypes.map((type) => [type.typename, type.plugintypeid]));
+    audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, status: audit.actual.pluginTypes.find((item) => item.id === type.plugintypeid)?.status || "verified" }));
+
+    const stepIdByLogicalIdentifier = {};
+    for (const step of manifest.steps) {
+      const pluginTypeId = pluginTypeByName[step.pluginType];
+      const messageId = messageByName[step.message];
+      const filterId = filterByMessageId[messageId];
+      assert(isGuid(pluginTypeId) && isGuid(messageId) && isGuid(filterId), `Missing registration dependency for ${step.logicalIdentifier}.`);
+      const payload = buildStepPayload(step, messageId, filterId, pluginTypeId);
+      let response;
+      try {
+        response = await post("/api/data/v9.2/sdkmessageprocessingsteps", payload, "stepPost");
+      } catch (error) {
+        await saveAudit("registration-audit-failed.json");
+        throw error;
+      }
+      const stepId = extractId(response, "sdkmessageprocessingstep");
+      let verified = (await querySingle(get, `/api/data/v9.2/sdkmessageprocessingsteps(${stepId})?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value`, `step ${step.logicalIdentifier}`));
+      if (!(Number(verified.statecode) === 1 && Number(verified.statuscode) === 2)) {
+        await patch(`/api/data/v9.2/sdkmessageprocessingsteps(${stepId})`, { statecode: 1, statuscode: 2 }, "stepPatch");
+        verified = await querySingle(get, `/api/data/v9.2/sdkmessageprocessingsteps(${stepId})?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value`, `disabled step ${step.logicalIdentifier}`);
+      }
+      assert(Number(verified.statecode) === 1 && Number(verified.statuscode) === 2, `Step ${step.logicalIdentifier} is not Disabled after create.`);
+      stepIdByLogicalIdentifier[step.logicalIdentifier] = stepId;
+      audit.actual.steps.push({ id: stepId, logicalIdentifier: step.logicalIdentifier, name: verified.name, message: step.message, stage: verified.stage, mode: verified.mode, rank: verified.rank, statecode: verified.statecode, statuscode: verified.statuscode, filteringattributes: verified.filteringattributes });
+    }
+
+    for (const step of manifest.steps) {
+      const stepId = stepIdByLogicalIdentifier[step.logicalIdentifier];
+      for (const image of step.images) {
+        const payload = buildImagePayload(image, stepId);
+        let response;
+        try {
+          response = await post("/api/data/v9.2/sdkmessageprocessingstepimages", payload, "imagePost");
+        } catch (error) {
+          await saveAudit("registration-audit-failed.json");
+          throw error;
+        }
+        const imageId = extractId(response, "sdkmessageprocessingstepimage");
+        const imageRow = await querySingle(get, `/api/data/v9.2/sdkmessageprocessingstepimages(${imageId})?$select=sdkmessageprocessingstepimageid,name,entityalias,imagetype,attributes,messagepropertyname,_sdkmessageprocessingstepid_value`, `image ${step.logicalIdentifier}:${image.name}`);
+        audit.actual.images.push({ id: imageId, step: step.logicalIdentifier, name: imageRow.name, alias: imageRow.entityalias, imageType: imageRow.imagetype, attributes: imageRow.attributes, messagePropertyName: imageRow.messagepropertyname });
+      }
+    }
+
+    const componentTargets = [
+      { type: COMPONENT_TYPES.pluginAssembly, id: assemblyId, label: "pluginAssembly" },
+      ...pluginTypes.map((type) => ({ type: COMPONENT_TYPES.pluginType, id: type.plugintypeid, label: `pluginType:${type.typename}` })),
+      ...Object.entries(stepIdByLogicalIdentifier).map(([logicalIdentifier, id]) => ({ type: COMPONENT_TYPES.step, id, label: `step:${logicalIdentifier}` })),
+      ...audit.actual.images.map((image) => ({ type: COMPONENT_TYPES.image, id: image.id, label: `image:${image.step}:${image.name}` })),
+    ];
+    for (const component of componentTargets) {
+      const existing = (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${component.type} and objectid eq ${component.id}`)).value || [];
+      if (existing.length === 0) {
+        const response = await post("/api/data/v9.2/AddSolutionComponent", { ComponentId: component.id, ComponentType: component.type, SolutionUniqueName: SOLUTION, AddRequiredComponents: false, DoNotIncludeSubcomponents: true }, "solutionComponentPost", {});
+        audit.actual.solutionComponents.push({ component: component.label, componentId: component.id, componentType: component.type, status: "added", response: responseSummary(response) });
+      } else if (existing.length === 1) {
+        audit.actual.solutionComponents.push({ component: component.label, componentId: component.id, componentType: component.type, status: "alreadyExistsAndValid", solutionComponentId: existing[0].solutioncomponentid });
+      } else {
+        throw new Error(`Blocked: duplicate solution components for ${component.label}.`);
+      }
+    }
+
+    const finalAssembly = await querySingle(get, `/api/data/v9.2/pluginassemblies(${assemblyId})?$select=pluginassemblyid,name,version,publickeytoken,isolationmode,sourcetype,ismanaged`, "final plugin assembly");
+    const finalTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
+    const finalSteps = (await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value&$filter=_plugintypeid_value eq ${pluginTypeByName[manifest.steps[0].pluginType]}`)).value || [];
+    const finalImages = [];
+    for (const stepId of Object.values(stepIdByLogicalIdentifier)) {
+      finalImages.push(...((await get(`/api/data/v9.2/sdkmessageprocessingstepimages?$select=sdkmessageprocessingstepimageid,name,entityalias,imagetype,attributes,messagepropertyname,_sdkmessageprocessingstepid_value&$filter=_sdkmessageprocessingstepid_value eq ${stepId}`)).value || []));
+    }
+    audit.actual.final = { assembly: finalAssembly, pluginTypes: finalTypes, steps: finalSteps, images: finalImages };
+    audit.completedAtUtc = new Date().toISOString();
+    audit.status = "success";
+    await saveAudit();
+    console.log(JSON.stringify({ status: "success", auditDir, assemblyId, pluginTypeIds: finalTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename })), stepIds: audit.actual.steps.map((step) => ({ id: step.id, logicalIdentifier: step.logicalIdentifier, statecode: step.statecode, statuscode: step.statuscode })), imageCount: finalImages.length, writeRequests: audit.writeRequests, writeCounts: audit.writeCounts, publishExecuted: false, businessDataWrites: 0, productionRequests: 0 }, null, 2));
+  } catch (error) {
+    audit.status = "blocked";
+    audit.completedAtUtc = new Date().toISOString();
+    audit.errors.push({ operation: "run", error: errorSummary(error) });
+    await saveAudit("registration-audit-failed.json");
+    throw error;
+  }
+}
+
+runDataverseCli(import.meta.url, main);
+
+export { buildPluginTypePayload, buildResumePlan, extractId };

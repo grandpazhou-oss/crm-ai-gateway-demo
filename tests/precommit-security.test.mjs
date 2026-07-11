@@ -19,7 +19,7 @@ const writeScripts = new Set([
   "add-phase1a-fields-to-solution.mjs", "apply-phase1b-m1-status-reasons.mjs", "apply-phase1c1-actual-management-table.mjs",
   "apply-phase1c2-opportunity-relationship.mjs", "apply-phase1c3-actual-management-view.mjs", "apply-phase1c3a-add-view-to-solution.mjs",
   "apply-phase1c3c-retry-add-view-to-solution.mjs", "create-phase1b-full-form.mjs", "create-phase1b-full-view.mjs",
-  "patch-phase1b-m2a-demo-fields.mjs", "phase1c5-synthetic-actuals.mjs", "repair-phase1b-form-base-chinese-labels.mjs",
+  "patch-phase1b-m2a-demo-fields.mjs", "apply-phase1c5r2d1-registration.mjs", "phase1c5-synthetic-actuals.mjs", "repair-phase1b-form-base-chinese-labels.mjs",
   "repair-phase1b-form-visual-labels.mjs",
 ]);
 
@@ -33,7 +33,7 @@ test("Dataverse script inventory covers every executable script and write script
     if (writeScripts.has(file)) assert.match(source, /assertDataverseScriptGate\(\{ mode: "write-capable" \}\)/);
     if (file === "phase1a-full.mjs") assert.match(source, /assertDataverseScriptGate\(\{ mode: "publish\/deploy-capable" \}\)/);
   }
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
 });
 
 test("curated Opportunity schema contains unique project fields without environment export properties", async () => {
