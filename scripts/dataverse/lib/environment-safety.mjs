@@ -1,4 +1,22 @@
+import { pathToFileURL } from "node:url";
+
 const DYNAMICS_HOSTNAME = /^[a-z0-9-]+\.crm\d*\.dynamics\.com$/i;
+
+export function isDirectRun(metaUrl, argvEntry = process.argv[1]) {
+  if (!argvEntry) return false;
+  return metaUrl === pathToFileURL(argvEntry).href;
+}
+
+export function runDataverseCli(metaUrl, main, { onError = (error) => console.error(error.stack || error.message) } = {}) {
+  if (!isDirectRun(metaUrl)) return false;
+  import("dotenv/config")
+    .then(() => main())
+    .catch((error) => {
+      onError(error);
+      process.exitCode = 1;
+    });
+  return true;
+}
 
 export function getDataverseUrl(env = process.env) {
   const raw = String(env.DATAVERSE_URL || "").trim().replace(/\/$/, "");

@@ -1,14 +1,13 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const FIELD = "aigw_organizationgroup_choice";
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
-const FULL_REPLICA_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+let ORIGINAL_FORM_ID;
+let FULL_REPLICA_FORM_ID;
 const TEMPORARY_2052_LABEL = "组织团体（AI Demo Choice）";
 const RESTORE_2052_LABEL = "组织团体";
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -26,7 +25,10 @@ function formControlReferences(xml, field) {
   return refs;
 }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+  FULL_REPLICA_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
   const root = process.cwd();
   const client = createDynamicsClient();
   const get = async (url) => (await client.dataverseGet(url)).body;
@@ -74,4 +76,5 @@ async function main() {
   console.log(JSON.stringify({ dryRun: true, target: manifest.target, formReferenceCount: forms.length, viewReferenceCount: views.length, fullReplicaControlLabels: manifest.impactAudit.fullReplicaControlLabels, publishRequiredForReliableVisibility: manifest.minimumWritePlan.publish.requiredForModelDrivenClientVisibility, recommendation: manifest.recommendation, report: "docs/d365/phase1b-m2b-temporary-display-name-dry-run.json", backup: path.relative(root, backup) }, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

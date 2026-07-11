@@ -1,11 +1,10 @@
-import "dotenv/config";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const FIELDS = ["aigw_opportunityplace", "aigw_globalinitiative", "aigw_alpscooperation", "aigw_sealandpol", "aigw_sealandpod", "aigw_airpol", "aigw_airpod"];
 const SCENARIOS = [
@@ -20,7 +19,8 @@ const label = (option) => Object.fromEntries((option.Label?.LocalizedLabels || [
 const hasValue = (row, field) => Object.hasOwn(row, field) && row[field] !== null;
 const isDemoName = (value) => /^\[AI-DEMO\]/.test(String(value || ""));
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
   assertDataverseScriptGate({ mode: "write-capable" });
   const confirm = process.argv.includes("--confirm");
   const index = process.argv.indexOf("--preflight");
@@ -112,4 +112,5 @@ async function main() {
   console.log(JSON.stringify({ patched: results.length, skipped: plan.length - results.length, failed: failed.length, fieldCounts: Object.fromEntries(FIELDS.map((field) => [field, results.filter((item) => item.fieldsChanged.includes(field)).length])), afterEmpty, publishExecuted: false }, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

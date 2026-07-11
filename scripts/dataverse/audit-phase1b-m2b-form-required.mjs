@@ -1,13 +1,12 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+let FORM_ID;
+let ORIGINAL_FORM_ID;
 const REQUIRED_FIELDS = [
   "name", "parentaccountid", "aigw_organizationgroup_choice", "aigw_bookingdepartment_choice", "aigw_opportunitytype", "aigw_casestage", "aigw_salesdepartment_choice", "aigw_opportunitydetailtype", "aigw_startdate", "aigw_opportunityplace", "description", "aigw_opportunitylist_bool", "transactioncurrencyid",
   "aigw_budgetstatus", "aigw_researchbackground_choice", "aigw_decider_choice", "aigw_customerneed_choice", "aigw_proposalcontent_choice",
@@ -27,7 +26,10 @@ const hasValue = (row, field, metadata) => {
   return keys.some((key) => Object.hasOwn(row, key) && row[key] !== null);
 };
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (url) => (await client.dataverseGet(url)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
   if ((process.env.AI_PROVIDER || "demo") !== "demo" || (process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("Safety gate failed: AI provider must remain demo and external AI disabled");
@@ -81,4 +83,5 @@ async function main() {
   console.log(JSON.stringify({ dryRun: true, targetFields: rows.length, alreadyCompliant: rows.filter((row) => row.alreadyCompliant).map((row) => row.logicalName), businessRuleActions: buildSheet.actions.length, allDemoFieldsNonNull: rows.every((row) => row.currentDemoNullCount === 0), formXmlRequiredTokens: formRequiredTokens(form.formxml), existingBusinessRules: (rulesResponse.value || []).map((rule) => rule.name), docs: ["docs/d365/phase1b-m2b-form-required-dry-run.json", "docs/d365/phase1b-m2b-form-required-fields.csv", "docs/d365/phase1b-m2b-business-rule-build-sheet.md"], backup: path.relative(root, dir) }, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

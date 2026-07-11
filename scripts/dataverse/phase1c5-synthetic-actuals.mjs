@@ -1,11 +1,10 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 import { buildSyntheticActual, MONEY_FIELDS, reconcileSyntheticActuals, TARGET_FIELDS } from "./lib/phase1c5-synthetic-actuals.mjs";
 
-const URL = getDataverseUrl();
+let URL;
 const AUTH = "CONFIRM_D365_TEST_WRITE_PHASE_1C_5_SYNTHETIC_ACTUALS";
 const MANIFEST = "local-artifacts/d365/docs/d365/phase1c-5-synthetic-actuals-manifest.json";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,7 +39,8 @@ function validateState(state) {
   };
 }
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
   assertDataverseScriptGate({ mode: "write-capable" });
   const root = process.cwd();
   const confirmAt = process.argv.indexOf("--confirm");
@@ -124,4 +124,5 @@ async function main() {
   console.log(JSON.stringify({ mode: "confirm", executionDir, log }, null, 2));
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

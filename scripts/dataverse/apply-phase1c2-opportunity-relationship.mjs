@@ -1,13 +1,12 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 import { reconcileAttributes } from "./lib/phase1c1-reconciliation.mjs";
 import { compareLookup, compareRelationship, createAtomicRelationshipWithReadback } from "./lib/phase1c2-reconciliation.mjs";
 
-const URL = getDataverseUrl();
+let URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const TARGET = "aigw_actualmanagement";
 const LOOKUP = "aigw_opportunityid";
@@ -15,11 +14,11 @@ const RELATIONSHIP = "aigw_opportunity_actualmanagement";
 const MANIFEST_PATH = "docs/d365/phase1c-2-relationship-manifest.json";
 const FIELD_MANIFEST_PATH = "docs/d365/phase1c-1r-missing-fields-resume-manifest.json";
 const AUTHORIZATION = "CONFIRM_D365_TEST_WRITE_PHASE_1C_2_RELATIONSHIP";
-const FULL_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
-const ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
-const BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
-const BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
+let FULL_FORM_ID;
+let ORIGINAL_FORM_ID;
+let ORIGINAL_VIEW_ID;
+let BUSINESS_RULE_ID;
+let BPF_ID;
 const ATTRIBUTE_ENDPOINT = `/api/data/v9.2/EntityDefinitions(LogicalName='${TARGET}')/Attributes`;
 
 const sha256 = (value) => createHash("sha256").update(String(value ?? "")).digest("hex");
@@ -31,7 +30,13 @@ function castFor(request) {
   return String(request.payload["@odata.type"]).endsWith("MoneyAttributeMetadata") ? "MoneyAttributeMetadata" : "DateTimeAttributeMetadata";
 }
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  FULL_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+  ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
+  BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
+  BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
   assertDataverseScriptGate({ mode: "write-capable" });
   const root = process.cwd();
   const args = process.argv.slice(2);
@@ -296,7 +301,5 @@ async function main() {
   if (!verification.pass) process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exitCode = 1;
-});
+
+runDataverseCli(import.meta.url, main);

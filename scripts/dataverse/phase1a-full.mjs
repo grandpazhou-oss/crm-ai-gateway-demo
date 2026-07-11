@@ -1,15 +1,14 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, getRequiredLocalArtifactPath } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, getRequiredLocalArtifactPath, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION_UNIQUE_NAME = "CRMAIGatewayDemo";
 const SOLUTION_FRIENDLY_NAME = "CRM AI Gateway Demo";
 const PUBLISHER_PREFIX = "aigw";
-const ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
-const FIELD_EXPORT_PATH = getRequiredLocalArtifactPath("D365_OPPORTUNITY_RAW_EXPORT_PATH");
+let ORIGINAL_VIEW_ID;
+let FIELD_EXPORT_PATH;
 const LANGUAGE_CODE = 2052;
 
 const aliasMap = {
@@ -223,7 +222,10 @@ async function addToSolution(metadataId) {
   });
 }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
+  FIELD_EXPORT_PATH = getRequiredLocalArtifactPath("D365_OPPORTUNITY_RAW_EXPORT_PATH");
   assertDataverseScriptGate({ mode: "publish/deploy-capable" });
   const config = client.config;
   if (config.dataverseUrl !== EXPECTED_URL) throw new Error(`Safety gate failed: DATAVERSE_URL=${config.dataverseUrl || "<empty>"}`);
@@ -362,4 +364,5 @@ async function main() {
   console.log(JSON.stringify({ backupDir: path.relative(repoRoot, backupDir), auditRows: audit.length, creationPlan: missingCreationPlan.length, created: created.length, failed: verification.failedCount, valueConflicts: valueConflicts.length, publish, verification }, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

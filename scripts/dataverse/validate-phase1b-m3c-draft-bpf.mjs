@@ -1,10 +1,9 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const EXPECTED_NAME = "销售流程 - AI Demo Full Replica";
 const EXPECTED_UNIQUE_NAME = "aigw_ai_demo_full_replica";
@@ -36,7 +35,8 @@ function stageFields(stage) {
   visit(stage);
   return [...new Map(found.map((field) => [field.logicalName, field])).values()];
 }
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (url) => (await client.dataverseGet(url)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
   if ((process.env.AI_PROVIDER || "demo") !== "demo" || (process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("Safety gate failed: AI provider must remain demo and external AI disabled");
@@ -71,4 +71,5 @@ async function main() {
   await Promise.all([fs.writeFile(path.join(docs, "phase1b-m3c-draft-bpf-validation.json"), JSON.stringify(report, null, 2)), fs.writeFile(path.join(backup, "01_m3c_draft_bpf_validation.json"), JSON.stringify(report, null, 2)), fs.writeFile(path.join(backup, "02_m3c_clientdata.json"), JSON.stringify(parsed, null, 2))]);
   console.log(JSON.stringify({ readOnly: true, workflow: report.workflow, solutionMembership: report.solutionMembership, stages: report.stages, expectedStepAudit: report.expectedStepAudit, processstageRows: report.processstageRows, managedSalesProcess: report.managedSalesProcess, demoInstanceAudit: report.demoInstanceAudit, report: "docs/d365/phase1b-m3c-draft-bpf-validation.json", backup: path.relative(root, backup) }, null, 2));
 }
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

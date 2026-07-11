@@ -1,8 +1,7 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 import {
   compareEntityMetadata,
   comparePrimaryAttribute,
@@ -10,10 +9,10 @@ import {
   reconcileAttributes,
 } from "./lib/phase1c1-reconciliation.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const TARGET = "aigw_actualmanagement";
-const ENTITY_METADATA_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_ENTITY_METADATA_ID");
+let ENTITY_METADATA_ID;
 const MANIFEST_PATH = "docs/d365/phase1c-1r-missing-fields-resume-manifest.json";
 const AUTHORIZATION = "CONFIRM_D365_TEST_WRITE_PHASE_1C_1R_MISSING_FIELDS";
 const ATTRIBUTE_ENDPOINT = `/api/data/v9.2/EntityDefinitions(LogicalName='${TARGET}')/Attributes`;
@@ -36,7 +35,9 @@ function selectFor(request) {
     : "MetadataId,LogicalName,SchemaName,AttributeType,Format,RequiredLevel,DisplayName";
 }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  ENTITY_METADATA_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_ENTITY_METADATA_ID");
   assertDataverseScriptGate({ mode: "write-capable" });
   const root = process.cwd();
   const args = process.argv.slice(2);
@@ -210,7 +211,5 @@ async function main() {
   console.log(JSON.stringify({ status: "success", backupDir: path.relative(root, backupDir), ...log.final, publishExecuted: false }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exitCode = 1;
-});
+
+runDataverseCli(import.meta.url, main);

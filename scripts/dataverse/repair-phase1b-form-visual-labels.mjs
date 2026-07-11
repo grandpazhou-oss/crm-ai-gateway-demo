@@ -1,13 +1,12 @@
-import "dotenv/config";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+let EXPECTED_URL;
+let FORM_ID;
+let ORIGINAL_FORM_ID;
 const FORM_NAME = "AI Gateway Opportunity Demo - Full Replica";
 const DOCS = "docs/d365";
 
@@ -92,7 +91,10 @@ function analyze(xml, matrix) {
   const names = sectionData.map((item) => item.name); const tnames = tabData.map((item) => item.name);
   return { hash: hash(xml), counts: { tabs: tabs.length, sections: sections.length, controls: elements(xml, "control").length, uniqueBoundFields: new Set(fields).size }, tabData, sectionData, summaryColumns: columns.map((column) => ({ width: attr(startTag(column), "width"), sections: elements(column, "section").map((section) => attr(startTag(section), "name")) })), labels: { emptyTabs: tabData.filter((item) => !item.labels.some((x) => x.languagecode === "2052" && x.description) || !item.labels.some((x) => x.languagecode === "1033" && x.description)).map((item) => item.name), emptyBusinessSections: sectionData.filter((item) => SECTION_LABELS[item.name] && (!item.labels.some((x) => x.languagecode === "2052" && x.description) || !item.labels.some((x) => x.languagecode === "1033" && x.description) || item.showlabel !== "true")).map((item) => item.name), missingControlLabels }, invariants: { namesUnique: new Set(tnames).size === tnames.length && new Set(names).size === names.length, targetBusinessFields: new Set(fields).size >= 98, monthlyInBudget: monthly.filter((field) => budget.includes(`datafieldname="${field}"`)).length, monthlyOutsideBudget: monthly.filter((field) => xml.replace(budget, "").includes(`datafieldname="${field}"`)).length, header: ["aigw_winprobabilityrank", "aigw_budgetstatus", "ownerid"].filter((field) => (elements(xml, "header")[0] || "").includes(`datafieldname="${field}"`)), idsUnique: ["tab", "section", "cell", "control"].every(idsUnique), hasTimeline: xml.includes('name="aigw_fr_summary_timeline"'), hasProduct: xml.includes('name="Product_Line_Items"'), hasDocuments: xml.includes('name="documents_sharepoint"'), hasNavigation: /<Navigation\b/.test(xml), hasQuotes: xml.includes('name="QUOTES"'), hasAiGateway: xml.includes('name="AI_Gateway_Demo"'), actualsSubgrid: (tabs.find((tab) => attr(startTag(tab), "name") === "aigw_fr_tab_actuals") || "").includes('indicationOfSubgrid="true"') } };
 }
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
   assertDataverseScriptGate({ mode: "write-capable" });
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (url) => (await client.dataverseGet(url)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL || (process.env.AI_PROVIDER || "demo") !== "demo" || (process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("Safety gate failed");
@@ -108,4 +110,5 @@ async function main() {
   const [afterForm, originalAfter] = await Promise.all([get(`/api/data/v9.2/systemforms(${FORM_ID})/Microsoft.Dynamics.CRM.RetrieveUnpublished?$select=formid,name,description,isdefault,formactivationstate,formxml`),get(`/api/data/v9.2/systemforms(${ORIGINAL_FORM_ID})?$select=formid,formxml`)]);
   const final = analyze(afterForm.formxml, matrixDoc.matrix || []); const result = { formId: FORM_ID, beforeHash: before.hash, afterHash: final.hash, labels: final.labels, summaryColumns: final.summaryColumns, validation: final.invariants, counts: final.counts, originalUnchanged: hash(originalAfter.formxml) === originalHash, publishExecuted: false, rollback: { restoreFormXmlFrom: path.join(dir, "00_unpublished_before.xml"), requiresSeparateConfirmation: true } }; await fs.writeFile(path.join(dir, "03_visual_repair_result.json"), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result, null, 2));
 }
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

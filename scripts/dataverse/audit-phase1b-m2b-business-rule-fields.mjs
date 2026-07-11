@@ -1,13 +1,12 @@
-import "dotenv/config";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+let FORM_ID;
 const FORM_NAME = "AI Gateway Opportunity Demo - Full Replica";
 const TARGET_FIELDS = [
   "parentaccountid", "aigw_organizationgroup_choice", "aigw_bookingdepartment_choice", "aigw_opportunitytype", "aigw_casestage", "aigw_salesdepartment_choice", "aigw_opportunitydetailtype", "aigw_startdate", "aigw_opportunityplace", "description", "aigw_opportunitylist_bool",
@@ -69,7 +68,9 @@ function optionSetName(metadata) {
   return metadata?.OptionSet?.Name || metadata?.GlobalOptionSet?.Name || "";
 }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
   const root = process.cwd();
   const client = createDynamicsClient();
   const get = async (url) => (await client.dataverseGet(url)).body;
@@ -188,4 +189,5 @@ async function main() {
   console.log(JSON.stringify({ readOnly: true, fieldsAudited: rows.length, duplicateDisplayNameFields: rows.filter((row) => row.hasDuplicateDisplayName).map((row) => ({ logicalName: row.logicalName, duplicateLogicalNames: row.duplicateLogicalNames })), savedMatchingDraftRules: ruleAudit.length, firstTwoRecognizedBindings: visibleTwoActions, reportFiles: ["docs/d365/phase1b-m2b-business-rule-field-mapping.json", "docs/d365/phase1b-m2b-business-rule-field-mapping.csv"], backupDir: path.relative(root, backupDir) }, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

@@ -1,19 +1,18 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 import { reconcileAttributes } from "./lib/phase1c1-reconciliation.mjs";
 
-const URL = getDataverseUrl();
+let URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const TARGET = "aigw_actualmanagement";
-const FULL_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
-const ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
-const BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
-const BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
+let FULL_FORM_ID;
+let ORIGINAL_FORM_ID;
+let ORIGINAL_VIEW_ID;
+let BUSINESS_RULE_ID;
+let BPF_ID;
 const BASELINE = "backups/dataverse/phase1c1_actual_management_20260710T163801Z/01_before_snapshot.json";
 const RELATIONSHIP_BASELINE = "backups/dataverse/phase1b_dryrun_20260710T030013Z/04_actuals_metadata_audit.json";
 const MANIFEST = "docs/d365/phase1c-1r-missing-fields-resume-manifest.json";
@@ -25,7 +24,13 @@ function castFor(request) {
   return String(request.payload["@odata.type"]).endsWith("MoneyAttributeMetadata") ? "MoneyAttributeMetadata" : "DateTimeAttributeMetadata";
 }
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  FULL_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+  ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
+  BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
+  BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
   const root = process.cwd();
   const outputArg = process.argv[2];
   if (!outputArg) throw new Error("Usage: node validate-phase1c1r-missing-fields-result.mjs <execution-backup-dir>");
@@ -183,7 +188,5 @@ async function main() {
   if (!verification.pass) process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exitCode = 1;
-});
+
+runDataverseCli(import.meta.url, main);

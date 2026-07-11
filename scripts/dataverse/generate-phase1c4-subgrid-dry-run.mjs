@@ -2,11 +2,11 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const URL = getDataverseUrl();
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const VIEW_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_VIEW_ID");
+let URL;
+let FORM_ID;
+let VIEW_ID;
 const TAB_NAME = "aigw_fr_tab_actuals";
 const SECTION_NAME = "aigw_fr_actuals_information";
 const CONTROL_ID = "aigw_actualmanagement_subgrid";
@@ -22,7 +22,10 @@ function element(xml, tag, predicate) {
 const attr = (xml, name) => xml.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] || "";
 const count = (xml, tag) => (xml.match(new RegExp(`<${tag}\\b`, "g")) || []).length;
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  VIEW_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_VIEW_ID");
   const root = process.cwd();
   const docs = path.join(root, "docs", "d365");
   const localArtifacts = path.join(root, "local-artifacts", "d365", "docs", "d365");
@@ -97,4 +100,5 @@ async function main() {
   console.log(JSON.stringify({ backup, audit, files: ["local-artifacts/d365/docs/d365/phase1c0-actual-management-subgrid-formxml-draft.xml", "local-artifacts/d365/docs/d365/phase1c4-full-replica-formxml-draft.xml", "local-artifacts/d365/docs/d365/phase1c4-subgrid-formxml-diff.md", "docs/d365/phase1c-4-subgrid-manifest.json"] }, null, 2));
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

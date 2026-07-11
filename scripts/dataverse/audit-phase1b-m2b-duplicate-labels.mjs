@@ -1,12 +1,11 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+let FORM_ID;
 const RULE_NAME = "AI Gateway Full Replica - Required - Opportunity";
 const TARGET_FIELDS = [
   "parentaccountid", "aigw_organizationgroup_choice", "aigw_bookingdepartment_choice", "aigw_opportunitytype", "aigw_casestage", "aigw_salesdepartment_choice", "aigw_opportunitydetailtype", "aigw_startdate", "aigw_opportunityplace", "description", "aigw_opportunitylist_bool",
@@ -28,7 +27,9 @@ function formLabels(xml) {
   return result;
 }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (url) => (await client.dataverseGet(url)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
   if ((process.env.AI_PROVIDER || "demo") !== "demo" || (process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("Safety gate failed: AI provider must remain demo and external AI disabled");
@@ -65,4 +66,5 @@ async function main() {
   ]);
   console.log(JSON.stringify({ readOnly: true, summary: report.summary, currentPilotRule: report.currentPilotRule, reportFiles: ["docs/d365/phase1b-m2b-duplicate-label-audit.json", "docs/d365/phase1b-m2b-duplicate-label-audit.csv"], backup: path.relative(root, backup) }, null, 2));
 }
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

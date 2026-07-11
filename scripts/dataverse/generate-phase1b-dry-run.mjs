@@ -1,16 +1,15 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, getRequiredLocalArtifactPath } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, getRequiredLocalArtifactPath, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION_UNIQUE_NAME = "CRMAIGatewayDemo";
 const SOLUTION_FRIENDLY_NAME = "CRM AI Gateway Demo";
 const PUBLISHER_PREFIX = "aigw";
-const FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
-const VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
-const SOURCE_PATH = getRequiredLocalArtifactPath("D365_OPPORTUNITY_RAW_EXPORT_PATH");
+let FORM_ID;
+let VIEW_ID;
+let SOURCE_PATH;
 const DOCS_DIR = "docs/d365";
 
 const aliasMap = {
@@ -137,7 +136,11 @@ function formXml(matrix) {
 function fetchXml() { return `<fetch version=\"1.0\" output-format=\"xml-platform\" mapping=\"logical\" distinct=\"false\"><entity name=\"opportunity\">${viewColumns.map(([, name]) => `<attribute name=\"${name}\" />`).join("")}<filter type=\"and\"><condition attribute=\"name\" operator=\"like\" value=\"[[]AI-DEMO]%\" /></filter><order attribute=\"modifiedon\" descending=\"true\" /></entity></fetch>`; }
 function layoutXml() { return `<grid name=\"resultset\" object=\"3\" jump=\"name\" select=\"1\" icon=\"1\" preview=\"1\"><row name=\"result\" id=\"opportunityid\">${viewColumns.map(([, name, width]) => `<cell name=\"${name}\" width=\"${width}\" />`).join("")}</row></grid>`; }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+  VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
+  SOURCE_PATH = getRequiredLocalArtifactPath("D365_OPPORTUNITY_RAW_EXPORT_PATH");
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (url) => (await client.dataverseGet(url)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
   if ((process.env.AI_PROVIDER || "demo") !== "demo") throw new Error("Safety gate failed: AI_PROVIDER must be demo");
@@ -195,4 +198,5 @@ async function main() {
   console.log(JSON.stringify({ backupDir: path.relative(root, backupDir), generatedFiles: Object.keys(files), validations, actuals: { matchingEntities: actualMatches.map((x) => x.logicalName), subgrids: formSubgrids.length, actualsSubgridFound: formSubgrids.some((x) => x.hasActualKeyword) } }, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

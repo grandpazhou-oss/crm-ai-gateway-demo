@@ -1,11 +1,10 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const MAPPING_PATH = "local-artifacts/d365/docs/d365/status-reason-mapping.json";
 const STATUS_PATH = "/api/data/v9.2/EntityDefinitions(LogicalName='opportunity')/Attributes(LogicalName='statuscode')/Microsoft.Dynamics.CRM.StatusAttributeMetadata?$select=LogicalName,AttributeType&$expand=OptionSet($select=Options)";
@@ -76,7 +75,8 @@ async function readMapping(root) {
   catch (error) { if (error.code === "ENOENT") return null; throw error; }
 }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
   assertDataverseScriptGate({ mode: "write-capable" });
   const confirm = process.argv.includes("--confirm");
   const preflightArg = process.argv.indexOf("--preflight");
@@ -126,4 +126,5 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

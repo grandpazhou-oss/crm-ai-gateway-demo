@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import { buildDataverseSelect } from "./fieldMapping/safeTransforms.mjs";
 

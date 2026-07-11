@@ -1,15 +1,14 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 import { compareEntityMetadata, comparePrimaryAttribute, reconcileAttributes } from "./lib/phase1c1-reconciliation.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const TARGET = "aigw_actualmanagement";
-const ENTITY_METADATA_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_ENTITY_METADATA_ID");
+let ENTITY_METADATA_ID;
 const SOURCE_MANIFEST = "docs/d365/phase1c-1-table-fields-manifest.json";
 const RESUME_MANIFEST = "docs/d365/phase1c-1r-missing-fields-resume-manifest.json";
 const AUTHORIZATION = "CONFIRM_D365_TEST_WRITE_PHASE_1C_1R_MISSING_FIELDS";
@@ -17,7 +16,9 @@ const AUTHORIZATION = "CONFIRM_D365_TEST_WRITE_PHASE_1C_1R_MISSING_FIELDS";
 const sha256 = (value) => createHash("sha256").update(String(value ?? "")).digest("hex");
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  ENTITY_METADATA_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_ENTITY_METADATA_ID");
   const root = process.cwd();
   const client = createDynamicsClient();
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: Dataverse URL mismatch.");
@@ -130,7 +131,5 @@ async function main() {
   console.log(JSON.stringify({ readOnly: true, blocked, entityAlreadyExistsAndValid: manifest.entityAlreadyExistsAndValid, reconciliation: manifest.reconciliation, requestCount: missingRequests.length, manifest: RESUME_MANIFEST, backup: path.relative(root, backup), boundaryChecks }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exitCode = 1;
-});
+
+runDataverseCli(import.meta.url, main);

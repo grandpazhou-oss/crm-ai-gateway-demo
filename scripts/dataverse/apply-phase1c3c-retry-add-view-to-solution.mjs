@@ -1,23 +1,22 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 import { compareViewDefinition } from "./lib/phase1c3-view-reconciliation.mjs";
 
-const URL = getDataverseUrl();
+let URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const TABLE = "aigw_actualmanagement";
 const VIEW_NAME = "实绩管理 - AI Demo";
-const VIEW_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_VIEW_ID");
+let VIEW_ID;
 const MANIFEST_PATH = "docs/d365/phase1c-3b-add-view-to-solution-retry-manifest.json";
 const AUTHORIZATION = "CONFIRM_D365_TEST_WRITE_PHASE_1C_3C_RETRY_ADD_VIEW_TO_SOLUTION";
-const FULL_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
-const ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
-const BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
-const BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
+let FULL_FORM_ID;
+let ORIGINAL_FORM_ID;
+let ORIGINAL_VIEW_ID;
+let BUSINESS_RULE_ID;
+let BPF_ID;
 const EXPECTED_PAYLOAD = { ComponentId: VIEW_ID, ComponentType: 26, SolutionUniqueName: SOLUTION, AddRequiredComponents: false, DoNotIncludeSubcomponents: true };
 
 const sha256 = (value) => createHash("sha256").update(String(value ?? "")).digest("hex");
@@ -27,7 +26,14 @@ const normalizeId = (value) => String(value || "").replace(/[{}]/g, "").toLowerC
 const viewHash = (view) => sha256(JSON.stringify({ name: view.name, fetchxml: view.fetchxml, layoutxml: view.layoutxml, layoutjson: view.layoutjson, statecode: view.statecode, statuscode: view.statuscode, ismanaged: view.ismanaged }));
 const selectedHeaders = (headers) => Object.fromEntries(["content-type", "request-id", "x-ms-service-request-id", "x-ms-correlation-request-id", "activity-id", "odata-version", "location"].map((name) => [name, headers?.get?.(name) || null]));
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  VIEW_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_VIEW_ID");
+  FULL_FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+  ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
+  BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
+  BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
   assertDataverseScriptGate({ mode: "write-capable" });
   const root = process.cwd();
   const args = process.argv.slice(2);
@@ -170,4 +176,5 @@ async function main() {
   if (!after.pass) process.exitCode = 1;
 }
 
-main().catch((error) => { console.error(error.stack || error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

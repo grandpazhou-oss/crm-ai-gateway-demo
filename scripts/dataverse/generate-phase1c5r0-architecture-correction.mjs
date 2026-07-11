@@ -1,14 +1,15 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const URL = getDataverseUrl();
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+let URL;
+let FORM_ID;
 const FIELDS = ["aigw_yearrevenueactual", "aigw_yearrevenueactual_base", "aigw_yearrevenueactualcny"];
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
   const root = process.cwd();
   const client = createDynamicsClient();
   if (client.config.dataverseUrl !== URL) throw new Error("Dataverse URL gate failed");
@@ -81,4 +82,5 @@ async function main() {
   console.log(JSON.stringify({ writesExecuted: false, opportunityCount: opportunities.length, currencyDistribution: distribution, fields: fieldAudit, existingActualCount: actualRows.value.length, existingCurrencyMismatchCount: mismatchedExistingChildren.length }, null, 2));
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

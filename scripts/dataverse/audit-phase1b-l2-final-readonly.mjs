@@ -1,17 +1,16 @@
-import "dotenv/config";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const URL = getDataverseUrl();
+let URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
-const ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
-const BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
-const BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
+let FORM_ID;
+let ORIGINAL_FORM_ID;
+let ORIGINAL_VIEW_ID;
+let BUSINESS_RULE_ID;
+let BPF_ID;
 const STATUS_FIELDS = ["aigw_opportunityplace", "aigw_globalinitiative", "aigw_alpscooperation", "aigw_sealandpol", "aigw_sealandpod", "aigw_airpol", "aigw_airpod"];
 const BR_ACTIONS = ["parentaccountid", "aigw_startdate", "aigw_opportunityplace", "description", "aigw_projectsizeunit", "aigw_transportmode", "aigw_sealandpol", "aigw_sealandpod", "aigw_airpol", "aigw_airpod", "estimatedclosedate"];
 const BR_DEFERRED = ["aigw_organizationgroup_choice", "aigw_bookingdepartment_choice", "aigw_opportunitytype", "aigw_casestage", "aigw_salesdepartment_choice", "aigw_opportunitydetailtype", "aigw_opportunitylist_bool", "aigw_budgetstatus", "aigw_researchbackground_choice", "aigw_decider_choice", "aigw_customerneed_choice", "aigw_proposalcontent_choice", "aigw_globalinitiative", "aigw_alpscooperation", "aigw_goodshandled", "aigw_projectsize", "aigw_warehousescale", "aigw_spotcontinuous", "aigw_winprobabilityrank"];
@@ -44,7 +43,13 @@ function formAnalysis(xml, formjson, attributeNames) {
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b); const xmlSectionNames = sectionData.map((item) => item.name); const jsonSectionNames = jsonTabData.flatMap((tab) => tab.sections.map((section) => section.name));
   return { hashes: { formxml: h(xml), formjson: h(formjson) }, counts: { tabs: tabs.length, sections: sections.length, controls: controls.length, uniqueBoundFields: uniqueFields.length, jsonTabs: jsonTabs.length, jsonSections: jsonSectionNames.length, jsonUniqueBoundFields: jsonFields.length }, tabs: tabData, sections: sectionData, summaryColumns: elements(summary, "column").map((column) => ({ width: attr(start(column), "width"), sections: elements(column, "section").map((section) => attr(start(section), "name")) })), labels: { emptyTab1033: tabData.filter((item) => !item.label1033).map((item) => item.name), emptySection1033: sectionData.filter((item) => !item.label1033).map((item) => item.name), literalUndefinedXml: /undefined/i.test(xml), literalUndefinedJson: /undefined/i.test(formjson), formJsonNullLabels: jsonTabs.filter((tab) => tab.Label == null).length + jsonTabs.flatMap((tab) => arr(tab.Columns).flatMap((column) => arr(column.Sections))).filter((section) => section.Label == null).length }, fields: { missingMetadata: uniqueFields.filter((field) => !attributeNames.has(field)), monthlyInBudget: monthly.filter((field) => budget.includes(`datafieldname="${field}"`)), monthlyOutsideBudget: monthly.filter((field) => xml.replace(budget, "").includes(`datafieldname="${field}"`)), xmlHeaderFields, jsonHeaderFields }, sync: { tabNamesAndOrder: same(tabData.map((item) => item.name), jsonTabData.map((item) => item.name)), tabIds: same(tabData.map((item) => item.id.toLowerCase()), jsonTabData.map((item) => String(item.id).toLowerCase())), sectionNamesAndOrder: same(xmlSectionNames, jsonSectionNames), sectionIds: same(sectionData.map((item) => item.id.toLowerCase()), jsonTabData.flatMap((tab) => tab.sections.map((section) => String(section.id).toLowerCase()))), boundFieldSet: same([...uniqueFields].sort(), [...jsonFields].sort()), headerFields: same([...new Set(xmlHeaderFields)].sort(), [...new Set(jsonHeaderFields)].sort()) }, invariants: { namesUnique: new Set(tabData.map((item) => item.name)).size === tabData.length && new Set(sectionData.map((item) => item.name)).size === sectionData.length, namesValid: [...tabData, ...sectionData].every((item) => /^[A-Za-z0-9_]+$/.test(item.name)), idsUnique: ["tab", "section", "cell", "control"].every(uniqueIds), summaryLayout: same(elements(summary, "column").map((column) => elements(column, "section").map((section) => attr(start(section), "name"))), [LEFT, RIGHT]), hasTimeline: xml.includes('name="aigw_fr_summary_timeline"'), hasProduct: xml.includes('name="Product_Line_Items"'), hasDocuments: xml.includes('name="documents_sharepoint"'), hasNavigation: /<Navigation\b/.test(xml), hasQuotes: xml.includes('name="QUOTES"'), hasAiGatewayTab: xml.includes('name="AI_Gateway_Demo"'), actualsSubgrid: (tabs.find((tab) => attr(start(tab), "name") === "aigw_fr_tab_actuals") || "").includes('indicationOfSubgrid="true"') } };
 }
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+  ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
+  BUSINESS_RULE_ID = getRequiredEnvironmentId("D365_BUSINESS_RULE_ID");
+  BPF_ID = getRequiredEnvironmentId("D365_BPF_ID");
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (url) => (await client.dataverseGet(url)).body;
   if (client.config.dataverseUrl !== URL) throw new Error("Safety gate failed: test URL mismatch");
   if ((process.env.AI_PROVIDER || "demo") !== "demo" || (process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("Safety gate failed: AI must remain demo/disabled");
@@ -88,4 +93,5 @@ async function main() {
   await Promise.all([fs.writeFile(path.join(docs, "phase1b-l2-final-readonly-validation.json"), JSON.stringify(report, null, 2)), fs.writeFile(path.join(backup, "01_l2_final_readonly_validation.json"), JSON.stringify(report, null, 2)), fs.writeFile(path.join(backup, "02_full_replica_unpublished_formxml.xml"), unpublishedForm.formxml), fs.writeFile(path.join(backup, "03_full_replica_unpublished_formjson.json"), unpublishedForm.formjson)]);
   console.log(JSON.stringify({ overall: report.overall, formStatus: report.formStatus, form: { counts: report.form.counts, hashes: report.form.hashes, sync: report.form.sync, labels: report.form.labels, fields: report.form.fields, invariants: report.form.invariants, tabs: report.form.tabs.map((item) => ({ name: item.name, label1033: item.label1033 })), sections: report.form.sections.map((item) => ({ name: item.name, label1033: item.label1033 })) }, statusReasons: report.statusReasons, m2a: report.m2a, businessRule: report.businessRule, bpf: report.bpf, protection: report.protection, report: "docs/d365/phase1b-l2-final-readonly-validation.json", backup: path.relative(root, backup) }, null, 2));
 }
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

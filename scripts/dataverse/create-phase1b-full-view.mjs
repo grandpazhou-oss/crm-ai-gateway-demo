@@ -1,15 +1,14 @@
-import "dotenv/config";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const FRIENDLY_SOLUTION = "CRM AI Gateway Demo";
 const PREFIX = "aigw";
-const ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
+let ORIGINAL_VIEW_ID;
 const VIEW_NAME = "所有案件 - AI Demo Full Replica";
 const DOCS = "docs/d365";
 
@@ -47,7 +46,9 @@ function cloneLayoutJson(original, columns) {
   layout.Rows[0].Cells = columns.map((column) => ({ ...template, Name: column.targetLogicalName, Width: Number(column.width), RelatedEntityName: "", LabelId: "", IsHidden: false, DisableSorting: false }));
   return JSON.stringify(layout);
 }
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  ORIGINAL_VIEW_ID = getRequiredEnvironmentId("D365_ORIGINAL_VIEW_ID");
   assertDataverseScriptGate({ mode: "write-capable" });
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (p) => (await client.dataverseGet(p)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
@@ -101,4 +102,5 @@ async function main() {
   const output = { savedqueryid, active: created.statecode === 0 && created.statuscode === 1, inSolution, fallbackUsed, validation: preflight.validation, fetchXmlExecution: checkRows(fetchResult), savedQueryExecution: checkRows(savedQueryResult), originalUnchanged: preflight.originalViewHash === hash(JSON.stringify({ fetchxml: originalAfter.fetchxml, layoutxml: originalAfter.layoutxml, layoutjson: originalAfter.layoutjson })), publishExecuted: false, rollback: { newSavedQueryId: savedqueryid, deleteRequiresSeparateConfirmation: true, originalViewId: ORIGINAL_VIEW_ID } };
   await fs.writeFile(path.join(path.dirname(preflightPath), "07_execution_result.json"), JSON.stringify(output, null, 2)); console.log(JSON.stringify(output, null, 2));
 }
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

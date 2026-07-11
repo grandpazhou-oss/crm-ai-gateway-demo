@@ -1,14 +1,15 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const URL = getDataverseUrl();
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+let URL;
+let FORM_ID;
 const fields = ["aigw_yearrevenueactual", "aigw_yearrevenueactualcny"];
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
   const root = process.cwd();
   const client = createDynamicsClient();
   if (client.config.dataverseUrl !== URL) throw new Error("Dataverse URL safety gate failed");
@@ -61,4 +62,5 @@ async function main() {
   console.log(JSON.stringify({ writesExecuted: false, opportunityFields: audit.map((item) => ({ logicalName: item.LogicalName, type: item.AttributeType, sourceType: item.SourceType, formDisabled: item.formDisabled })), monthlyFieldsVerified: manifest.plugin.monthlyFieldsVerified, files: ["docs/d365/phase1c-5r-opportunity-field-audit.json", "docs/d365/phase1c-5r-actual-totals-architecture.md", "docs/d365/phase1c-5r-plugin-write-manifest.json"] }, null, 2));
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

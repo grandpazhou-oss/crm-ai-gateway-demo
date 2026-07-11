@@ -1,19 +1,20 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 import { compareViewDefinition } from "./lib/phase1c3-view-reconciliation.mjs";
 
-const URL = getDataverseUrl();
+let URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const VIEW_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_VIEW_ID");
+let VIEW_ID;
 const TABLE = "aigw_actualmanagement";
 const RETRY_MANIFEST = "docs/d365/phase1c-3b-add-view-to-solution-retry-manifest.json";
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 const normalizeId = (value) => String(value || "").replace(/[{}]/g, "").toLowerCase();
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  VIEW_ID = getRequiredEnvironmentId("D365_ACTUAL_MANAGEMENT_VIEW_ID");
   const root = process.cwd();
   const client = createDynamicsClient();
   const get = async (url) => (await client.dataverseGet(url)).body;
@@ -143,7 +144,5 @@ async function main() {
   console.log(JSON.stringify({ readOnly: true, backupDir: path.relative(root, backupDir), retryManifest: RETRY_MANIFEST, previousResponseRecoverability: audit.previousResponseRecoverability, membership: audit.conclusions, querySupport: { methodA: methodA.supported, methodB: methodB.supported, methodC: methodC.supported, solutionNavigation: navigationResult.supported, rootChildren: children.supported }, rootComponent: audit.rootComponentAudit.rootComponent, retryRequired: retryManifest.executable }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exitCode = 1;
-});
+
+runDataverseCli(import.meta.url, main);

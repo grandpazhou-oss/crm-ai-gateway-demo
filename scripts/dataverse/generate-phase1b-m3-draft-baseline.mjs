@@ -1,19 +1,20 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const WORKFLOW_ID = getRequiredEnvironmentId("D365_BPF_ID");
+let WORKFLOW_ID;
 const EXPECTED_UNIQUE_NAME = "aigw_ai_demo_full_replica";
 const MANAGED_SALES_PROCESS = "opportunitysalesprocess";
 const DEFERRED_FIELDS = ["aigw_organizationgroup_choice", "aigw_salesdepartment_choice", "aigw_opportunitytype", "aigw_opportunitydetailtype", "aigw_wonreason_choice", "aigw_lostreason_choice"];
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 function stages(node, output = []) { if (!node || typeof node !== "object") return output; if (String(node.__class || "").includes("StageStep")) output.push(node); for (const value of Object.values(node)) stages(value, output); return output; }
 function fields(stage) { const result = []; const visit = (node, required = false) => { if (!node || typeof node !== "object") return; const requiredHere = required || node.isProcessRequired === true; if (node.dataFieldName) result.push({ logicalName: node.dataFieldName, required: requiredHere, displayLabel: node.controlDisplayName || node.dataFieldName }); for (const value of Object.values(node)) visit(value, requiredHere); }; visit(stage); return [...new Map(result.map((item) => [item.logicalName, item])).values()]; }
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  WORKFLOW_ID = getRequiredEnvironmentId("D365_BPF_ID");
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (url) => (await client.dataverseGet(url)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
   if ((process.env.AI_PROVIDER || "demo") !== "demo" || (process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("Safety gate failed: AI provider must remain demo and external AI disabled");
@@ -36,4 +37,5 @@ async function main() {
   await Promise.all([fs.writeFile(path.join(docs, "phase1b-m3-draft-baseline.json"), JSON.stringify(report, null, 2)), fs.writeFile(path.join(backup, "01_m3_draft_baseline.json"), JSON.stringify(report, null, 2)), fs.writeFile(path.join(backup, "02_m3_draft_clientdata.json"), JSON.stringify(parsed, null, 2))]);
   console.log(JSON.stringify({ readOnly: true, workflow: report.workflow, solutionMembership: report.solutionMembership, stages: report.stages, deferredFields: report.deferredFields, managedSalesProcess: report.managedSalesProcess, bpfInstanceAudit: report.bpfInstanceAudit, securityRoles: report.securityRoles, publishAndActivation: report.publishAndActivation, report: "docs/d365/phase1b-m3-draft-baseline.json", backup: path.relative(root, backup) }, null, 2));
 }
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

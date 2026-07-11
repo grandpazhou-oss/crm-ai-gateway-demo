@@ -1,16 +1,15 @@
-import "dotenv/config";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
 const SOLUTION_NAME = "CRM AI Gateway Demo";
 const PREFIX = "aigw";
-const SOURCE_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+let SOURCE_FORM_ID;
 const SOURCE_FORM_NAME = "AI Gateway Opportunity Demo";
 const TARGET_FORM_NAME = "AI Gateway Opportunity Demo - Full Replica";
 const DOCS = "docs/d365";
@@ -175,7 +174,9 @@ function formJsonReflectsTarget(formjson) {
   return Boolean(value) && ["Budget", "1Q", "2Q", "3Q", "4Q", "aigw_m4revenuebudget", "aigw_winprobabilityrank", "aigw_budgetstatus"].every((term) => value.includes(term));
 }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  SOURCE_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
   assertDataverseScriptGate({ mode: "write-capable" });
   const root = process.cwd(); const client = createDynamicsClient(); const get = async (p) => (await client.dataverseGet(p)).body;
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
@@ -261,4 +262,5 @@ async function main() {
   console.log(JSON.stringify(outputResult, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

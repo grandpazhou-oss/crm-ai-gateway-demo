@@ -1,15 +1,14 @@
-import "dotenv/config";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, getRequiredLocalArtifactPath } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, getRequiredLocalArtifactPath, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
-const SOURCE = getRequiredLocalArtifactPath("D365_OPPORTUNITY_RAW_EXPORT_PATH");
+let FORM_ID;
+let ORIGINAL_FORM_ID;
+let SOURCE;
 const PLACEMENT = "docs/d365/phase1b-form-field-placement.json";
 const DOCS = "docs/d365";
 
@@ -79,7 +78,11 @@ function plainForm(xml) {
 }
 function safeJson(value) { return JSON.stringify(value, null, 2); }
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+  SOURCE = getRequiredLocalArtifactPath("D365_OPPORTUNITY_RAW_EXPORT_PATH");
   const root = process.cwd();
   const client = createDynamicsClient();
   const get = async (url) => (await client.dataverseGet(url)).body;
@@ -234,4 +237,5 @@ async function main() {
   console.log(safeJson({ backup: path.relative(root, backup), files: Object.keys(files).concat(["phase1b-m0-status-reason-audit.md", "phase1b-m0-bpf-audit.md"]), validations, summary: { demoCount: demoRows.length, statusOptions: statusOptions.length, requiredCandidates: manifests.M2_requiredLevel.candidates.length, businessRules: businessRules.length, bpfs: bpfs.length, demoBpfInstances: instanceRows, publisherOptionValuePrefix: publisher.customizationoptionvalueprefix } }));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

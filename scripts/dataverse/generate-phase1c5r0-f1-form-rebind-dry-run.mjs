@@ -1,14 +1,13 @@
-import "dotenv/config";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const URL = getDataverseUrl();
+let URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
-const ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
+let FORM_ID;
+let ORIGINAL_FORM_ID;
 const OLD_FIELD = "aigw_yearrevenueactualcny";
 const NEW_FIELD = "aigw_yearrevenueactual_base";
 const NEW_CONTROL_ID = "aigw_fullreplica_aigw_yearrevenueactual_base_f18d5047";
@@ -19,7 +18,10 @@ function elements(xml, tag) { const re = new RegExp(`<${tag}\\b[^>]*>|</${tag}>`
 const start = (xml) => /^<[^>]+>/.exec(xml)?.[0] || "";
 const count = (text, token) => text.split(token).length - 1;
 
-async function main() {
+export async function main() {
+  URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+  ORIGINAL_FORM_ID = getRequiredEnvironmentId("D365_ORIGINAL_FORM_ID");
   const root = process.cwd();
   const client = createDynamicsClient();
   if (client.config.dataverseUrl !== URL) throw new Error("Dataverse URL safety gate failed");
@@ -108,4 +110,5 @@ async function main() {
   console.log(JSON.stringify({ writesExecuted: false, current: audit.current, baseMetadata: { logicalName: baseMetadata.LogicalName, isValidForForm: baseMetadata.IsValidForForm, isValidForRead: baseMetadata.IsValidForRead, isValidForCreate: baseMetadata.IsValidForCreate, isValidForUpdate: baseMetadata.IsValidForUpdate, calculationOf: baseMetadata.CalculationOf }, dependencies: audit.dependencies, draft: audit.draft, files: ["docs/d365/phase1c-5r0-f1-form-rebind-audit.json", "docs/d365/phase1c-5r0-f1-formxml-diff.md", "docs/d365/phase1c-5r0-f1-full-replica-formxml-draft.xml", "docs/d365/phase1c-5r0-f1-write-manifest.json"] }, null, 2));
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

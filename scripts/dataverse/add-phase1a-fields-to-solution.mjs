@@ -1,10 +1,9 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION_UNIQUE_NAME = "CRMAIGatewayDemo";
 const SOLUTION_FRIENDLY_NAME = "CRM AI Gateway Demo";
 const PUBLISHER_PREFIX = "aigw";
@@ -13,7 +12,8 @@ const client = createDynamicsClient();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const get = async (url) => (await client.dataverseGet(url)).body;
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
   assertDataverseScriptGate({ mode: "write-capable" });
   if (client.config.dataverseUrl !== EXPECTED_URL) throw new Error("Safety gate failed: unexpected Dataverse URL");
   if ((process.env.AI_PROVIDER || "demo") !== "demo") throw new Error("Safety gate failed: AI_PROVIDER must be demo");
@@ -53,4 +53,5 @@ async function main() {
   console.log(JSON.stringify({ backupDir: path.join("backups", "dataverse", latest), ...output, results: results.map(({ logicalName, metadataId, status, error }) => ({ logicalName, metadataId, status, error })) }, null, 2));
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
+runDataverseCli(import.meta.url, main);

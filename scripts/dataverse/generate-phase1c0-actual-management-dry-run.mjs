@@ -1,13 +1,12 @@
-import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
-import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId } from "./lib/environment-safety.mjs";
+import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
 
-const EXPECTED_URL = getDataverseUrl();
+let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
+let FORM_ID;
 const TARGET_TABLE = "aigw_actualmanagement";
 const RELATIONSHIP = "aigw_opportunity_actualmanagement";
 const VIEW_NAME = "实绩管理 - AI Demo";
@@ -31,7 +30,9 @@ const xmlEscape = (value) => String(value).replaceAll("&", "&amp;").replaceAll("
 const labelText = (label) => Object.values(labels(label)).join(" ");
 const readJson = async (file) => JSON.parse(await fs.readFile(file, "utf8"));
 
-async function main() {
+export async function main() {
+  EXPECTED_URL = getDataverseUrl();
+  FORM_ID = getRequiredEnvironmentId("D365_FULL_REPLICA_FORM_ID");
   const root = process.cwd();
   const docs = path.join(root, "docs", "d365");
   const backup = path.join(root, "backups", "dataverse", `phase1c0_actual_management_${nowStamp()}`);
@@ -269,7 +270,5 @@ async function main() {
   }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exitCode = 1;
-});
+
+runDataverseCli(import.meta.url, main);
