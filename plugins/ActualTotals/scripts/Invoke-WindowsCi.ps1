@@ -9,14 +9,42 @@ $testProject = Join-Path $pluginRoot "tests/CrmAiGateway.ActualTotals.Core.Tests
 $pluginProject = Join-Path $pluginRoot "src/CrmAiGateway.ActualTotals.Plugin/CrmAiGateway.ActualTotals.Plugin.csproj"
 $inspectorProject = Join-Path $pluginRoot "tools/AssemblyInspector/AssemblyInspector.csproj"
 $ciDirectory = Join-Path $pluginRoot ".ci"
-$artifactDirectory = Join-Path $pluginRoot "artifacts/Release"
+$artifactRoot = [IO.Path]::GetFullPath((Join-Path $pluginRoot "artifacts"))
+$artifactDirectory = [IO.Path]::GetFullPath((Join-Path $artifactRoot "Release"))
 $testResults = Join-Path $ciDirectory "TestResults"
 $keyPath = Join-Path $ciDirectory "actual-totals-ci-demo.snk"
 
-Remove-Item $ciDirectory -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $artifactDirectory -Recurse -Force -ErrorAction SilentlyContinue
+function Assert-SafeReleaseDirectory([string]$ReleaseDirectory, [string]$ExpectedArtifactRoot, [string]$RepositoryRoot) {
+    if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) { throw "Release artifact path must not be empty." }
+    $resolvedRelease = [IO.Path]::GetFullPath($ReleaseDirectory)
+    $resolvedArtifactRoot = [IO.Path]::GetFullPath($ExpectedArtifactRoot)
+    $resolvedRepository = [IO.Path]::GetFullPath($RepositoryRoot)
+    $expectedRelease = [IO.Path]::GetFullPath((Join-Path $resolvedArtifactRoot "Release"))
+    $repositoryPrefix = $resolvedRepository.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $artifactPrefix = $resolvedArtifactRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    if (-not $resolvedRelease.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Release artifact path is outside the repository." }
+    if (-not $resolvedRelease.StartsWith($artifactPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Release artifact path is outside the ActualTotals artifact root." }
+    if (-not $resolvedRelease.Equals($expectedRelease, [StringComparison]::OrdinalIgnoreCase)) { throw "Release artifact path must end exactly at artifacts/Release." }
+    if ($resolvedRelease.Equals($resolvedRepository, [StringComparison]::OrdinalIgnoreCase) -or $resolvedRelease.Equals($pluginRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "Refusing to clean a protected repository or Plugin directory." }
+    return $resolvedRelease
+}
+
+function Initialize-ReleaseDirectory([string]$ReleaseDirectory, [string]$ExpectedArtifactRoot, [string]$RepositoryRoot) {
+    $safeRelease = Assert-SafeReleaseDirectory $ReleaseDirectory $ExpectedArtifactRoot $RepositoryRoot
+    if (Test-Path -LiteralPath $safeRelease) { Remove-Item -LiteralPath $safeRelease -Recurse -Force }
+    New-Item -ItemType Directory -Path $safeRelease -Force | Out-Null
+    if (-not (Test-Path -LiteralPath $safeRelease -PathType Container)) { throw "Release artifact directory could not be created." }
+    return $safeRelease
+}
+
+function Assert-ArtifactFile([string]$FilePath, [string]$Description) {
+    if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf)) { throw "$Description was not created." }
+}
+
+if (Test-Path -LiteralPath $ciDirectory) { Remove-Item -LiteralPath $ciDirectory -Recurse -Force }
 New-Item $ciDirectory -ItemType Directory -Force | Out-Null
 New-Item $testResults -ItemType Directory -Force | Out-Null
+$artifactDirectory = Initialize-ReleaseDirectory $artifactDirectory $artifactRoot $repo
 
 try {
     $signingKeyBase64 = [Environment]::GetEnvironmentVariable("ACTUAL_TOTALS_SNK_BASE64")
@@ -57,13 +85,15 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Plugin Release build failed." }
 
     $builtDll = Join-Path $pluginRoot "src/CrmAiGateway.ActualTotals.Plugin/bin/Release/net462/CrmAiGateway.ActualTotals.Plugin.dll"
-    if (-not (Test-Path $builtDll)) { throw "Expected Plugin DLL was not produced." }
-    Copy-Item $builtDll $artifactDirectory
-
     $artifactDll = Join-Path $artifactDirectory "CrmAiGateway.ActualTotals.Plugin.dll"
+    Assert-ArtifactFile $builtDll "Expected Plugin DLL"
+    Copy-Item -LiteralPath $builtDll -Destination $artifactDll
+    Assert-ArtifactFile $artifactDll "Packaged Plugin DLL"
+
     $inspectionPath = Join-Path $artifactDirectory "assembly-inspection.json"
     dotnet run --project $inspectorProject --configuration Release -- $artifactDll $inspectionPath
     if ($LASTEXITCODE -ne 0) { throw "Assembly inspection failed." }
+    Assert-ArtifactFile $inspectionPath "Assembly inspection report"
     & $sn -q -vf $artifactDll
     if ($LASTEXITCODE -ne 0) { throw "Strong-name verification failed." }
 
@@ -77,7 +107,9 @@ try {
         skipped = [int]$counters.notExecuted
         report = "CI-only TRX; summarized in test-summary.json"
     }
-    $summary | ConvertTo-Json | Set-Content (Join-Path $artifactDirectory "test-summary.json") -Encoding utf8
+    $testSummaryPath = Join-Path $artifactDirectory "test-summary.json"
+    $summary | ConvertTo-Json | Set-Content $testSummaryPath -Encoding utf8
+    Assert-ArtifactFile $testSummaryPath "Test summary"
 
     $inspection = Get-Content $inspectionPath | ConvertFrom-Json
     $customDlls = @(Get-ChildItem $artifactDirectory -Filter *.dll)
@@ -122,10 +154,16 @@ try {
         deployable = $deployable
         deploymentBlockers = $failedGates
     }
-    $manifest | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $artifactDirectory "build-manifest.json") -Encoding utf8
+    $buildManifestPath = Join-Path $artifactDirectory "build-manifest.json"
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content $buildManifestPath -Encoding utf8
+    Assert-ArtifactFile $buildManifestPath "Build manifest"
     if (-not $deployable) { throw "One or more deployable gates failed." }
-    "{0}  CrmAiGateway.ActualTotals.Plugin.dll" -f $inspection.sha256 | Set-Content (Join-Path $artifactDirectory "plugin-sha256.txt") -Encoding ascii
-    $inspection.references | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $artifactDirectory "dependency-list.json") -Encoding utf8
+    $shaPath = Join-Path $artifactDirectory "plugin-sha256.txt"
+    $dependencyPath = Join-Path $artifactDirectory "dependency-list.json"
+    "{0}  CrmAiGateway.ActualTotals.Plugin.dll" -f $inspection.sha256 | Set-Content $shaPath -Encoding ascii
+    $inspection.references | ConvertTo-Json -Depth 4 | Set-Content $dependencyPath -Encoding utf8
+    Assert-ArtifactFile $shaPath "Plugin SHA-256 file"
+    Assert-ArtifactFile $dependencyPath "Dependency list"
 
     $expectedArtifacts = @(
         "CrmAiGateway.ActualTotals.Plugin.dll",
@@ -135,8 +173,11 @@ try {
         "plugin-sha256.txt",
         "test-summary.json"
     )
-    $actualArtifacts = @(Get-ChildItem $artifactDirectory -File | Select-Object -ExpandProperty Name | Sort-Object)
+    $artifactDirectories = @(Get-ChildItem -LiteralPath $artifactDirectory -Directory -Recurse)
+    if ($artifactDirectories.Count -ne 0) { throw "Release artifact must not contain nested directories." }
+    $actualArtifacts = @(Get-ChildItem -LiteralPath $artifactDirectory -File | Select-Object -ExpandProperty Name | Sort-Object)
     if (Compare-Object ($expectedArtifacts | Sort-Object) $actualArtifacts) { throw "Release artifact contains unexpected or missing files." }
+    if ($actualArtifacts.Count -ne 6) { throw "Release artifact must contain exactly six files." }
 }
 finally {
     if (Test-Path $keyPath) { Remove-Item $keyPath -Force }
