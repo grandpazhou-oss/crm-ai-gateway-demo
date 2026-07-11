@@ -71,7 +71,7 @@ async function sha256(file) {
 
 async function querySingle(get, endpoint, description) {
   const body = await get(endpoint);
-  const rows = Array.isArray(body.value) ? body.value : [];
+  const rows = Array.isArray(body.value) ? body.value : (body && typeof body === "object" && !body.error ? [body] : []);
   assert(rows.length === 1, `${description} expected exactly one row, got ${rows.length}`);
   return rows[0];
 }
