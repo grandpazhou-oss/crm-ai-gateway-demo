@@ -144,7 +144,6 @@ function buildStepPayload(step, messageId, filterId, pluginTypeId) {
     mode: step.mode,
     rank: step.rank,
     supporteddeployment: step.deploymentCode,
-    statuscode: 2,
     asyncautodelete: false,
     canbebypassed: false,
     "sdkmessageid@odata.bind": `/sdkmessages(${messageId})`,
@@ -492,4 +491,4 @@ export async function main(argv = process.argv.slice(2)) {
 
 runDataverseCli(import.meta.url, main);
 
-export { buildPluginTypePayload, buildResumePlan, classifyPluginTypes, extractId, findPluginTypeByDefinition, readAfterWriteById, resolvePluginTypeAfterWrite, validatePluginTypeDefinitions };
+export { buildPluginTypePayload, buildResumePlan, buildStepPayload, classifyPluginTypes, extractId, findPluginTypeByDefinition, readAfterWriteById, resolvePluginTypeAfterWrite, validatePluginTypeDefinitions };

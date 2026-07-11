@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildPluginTypePayload,
   buildResumePlan,
+  buildStepPayload,
   classifyPluginTypes,
   extractId,
   findPluginTypeByDefinition,
@@ -46,6 +47,21 @@ test("Plugin Type binding uses only pluginassemblyid", () => {
   assert.equal(payload.name, pluginTypeDefinition.name);
   assert.equal(payload.friendlyname, pluginTypeDefinition.friendlyName);
   assert.doesNotMatch(JSON.stringify(payload), /pluginassemblyidunique/);
+});
+
+test("Step creation omits Disabled status until the post-create PATCH", () => {
+  const payload = buildStepPayload({
+    displayName: "Demo Step",
+    businessPurpose: "Demo",
+    stage: 10,
+    mode: 0,
+    rank: 10,
+    deploymentCode: 0,
+    message: "Create",
+    filteringAttributes: [],
+  }, "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333");
+  assert.equal("statuscode" in payload, false);
+  assert.equal(payload.mode, 0);
 });
 
 test("invalid assembly IDs are rejected before binding", () => {
