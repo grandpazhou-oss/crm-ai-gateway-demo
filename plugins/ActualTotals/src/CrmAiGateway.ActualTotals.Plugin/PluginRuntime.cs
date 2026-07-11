@@ -26,7 +26,10 @@ namespace CrmAiGateway.ActualTotals.Plugin
 
         public bool Skip(string marker)
         {
-            return ExecutionGuard.ShouldSkip(Context.Depth, Context.SharedVariables, marker);
+            var sharedVariables = SharedVariablesAdapter.ToDictionary(Context.SharedVariables);
+            var shouldSkip = ExecutionGuard.ShouldSkip(Context.Depth, sharedVariables, marker);
+            if (!shouldSkip && sharedVariables.ContainsKey(marker)) Context.SharedVariables[marker] = sharedVariables[marker];
+            return shouldSkip;
         }
 
         public static void Translate(Action action)
