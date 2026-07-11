@@ -48,7 +48,7 @@ test("registration build sheet remains seven-step and uses only the approved Upd
 
   assert.equal(manifest.dryRun, true);
   assert.equal(manifest.executable, false);
-  assert.equal(manifest.assembly.registrationAuthorized, false);
+  assert.equal(manifest.registrationAuthorized, false);
   assert.equal(manifest.steps.length, 7);
   assert.deepEqual(manifest.filteringAttributes, expectedFilters);
   assert.ok(manifest.preDeploymentGates.includes("Phase 1C-5 seed remains blocked"));
