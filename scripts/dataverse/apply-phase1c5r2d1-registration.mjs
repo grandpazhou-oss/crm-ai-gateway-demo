@@ -546,25 +546,45 @@ export async function main(argv = process.argv.slice(2)) {
     }
     assert(audit.actual.images.length === manifest.steps.flatMap((step) => step.images).length, `Blocked: expected ${manifest.steps.flatMap((step) => step.images).length} Images, got ${audit.actual.images.length}.`);
 
-    const componentTargets = [
-      { type: COMPONENT_TYPES.pluginAssembly, id: assemblyId, label: "pluginAssembly" },
-      ...Object.entries(stepIdByLogicalIdentifier).map(([logicalIdentifier, id]) => ({ type: COMPONENT_TYPES.step, id, label: `step:${logicalIdentifier}` })),
-      ...audit.actual.images.map((image) => ({ type: COMPONENT_TYPES.image, id: image.id, label: `image:${image.step}:${image.name}` })),
-    ];
     const assemblyComponents = (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${COMPONENT_TYPES.pluginAssembly} and objectid eq ${assemblyId}`)).value || [];
     assert(assemblyComponents.length === 1 && Number(assemblyComponents[0].rootcomponentbehavior) === 0, "Blocked: Plugin Assembly root must include subcomponents before Plugin Types can be considered contained.");
     audit.actual.solutionComponents.push(...pluginTypes.map((type) => ({ component: `pluginType:${type.typename}`, componentId: type.plugintypeid, componentType: COMPONENT_TYPES.pluginType, status: "includedAsAssemblySubcomponent", rootSolutionComponentId: assemblyComponents[0].solutioncomponentid })));
+    const imageIds = audit.actual.images.map((image) => image.id);
+    const directImageComponents = imageIds.length
+      ? (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${COMPONENT_TYPES.image} and (${imageIds.map((id) => `objectid eq ${id}`).join(" or ")})`)).value || []
+      : [];
+    const directImageIds = new Set(directImageComponents.map((component) => lower(component.objectid)));
+    const imagesMissingDirectMembership = audit.actual.images.filter((image) => !directImageIds.has(lower(image.id)));
+    const stepsNeedingSubcomponents = new Set(imagesMissingDirectMembership.map((image) => image.step));
+    const componentTargets = [
+      { type: COMPONENT_TYPES.pluginAssembly, id: assemblyId, label: "pluginAssembly", doNotIncludeSubcomponents: true },
+      ...Object.entries(stepIdByLogicalIdentifier).map(([logicalIdentifier, id]) => ({ type: COMPONENT_TYPES.step, id, label: `step:${logicalIdentifier}`, doNotIncludeSubcomponents: !stepsNeedingSubcomponents.has(logicalIdentifier) })),
+    ];
     for (const component of componentTargets) {
       const existing = (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${component.type} and objectid eq ${component.id}`)).value || [];
       if (existing.length === 0) {
-        const response = await post("/api/data/v9.2/AddSolutionComponent", { ComponentId: component.id, ComponentType: component.type, SolutionUniqueName: SOLUTION, AddRequiredComponents: false, DoNotIncludeSubcomponents: true }, "solutionComponentPost", {});
+        const response = await post("/api/data/v9.2/AddSolutionComponent", { ComponentId: component.id, ComponentType: component.type, SolutionUniqueName: SOLUTION, AddRequiredComponents: false, DoNotIncludeSubcomponents: component.doNotIncludeSubcomponents }, "solutionComponentPost", {});
         audit.actual.solutionComponents.push({ component: component.label, componentId: component.id, componentType: component.type, status: "added", response: responseSummary(response) });
       } else if (existing.length === 1) {
-        audit.actual.solutionComponents.push({ component: component.label, componentId: component.id, componentType: component.type, status: "alreadyExistsAndValid", solutionComponentId: existing[0].solutioncomponentid });
+        if (component.type === COMPONENT_TYPES.step && component.doNotIncludeSubcomponents === false && Number(existing[0].rootcomponentbehavior) === 0) {
+          const response = await post("/api/data/v9.2/AddSolutionComponent", { ComponentId: component.id, ComponentType: component.type, SolutionUniqueName: SOLUTION, AddRequiredComponents: false, DoNotIncludeSubcomponents: false }, "solutionComponentPost", {});
+          audit.actual.solutionComponents.push({ component: component.label, componentId: component.id, componentType: component.type, status: "updatedToIncludeSubcomponents", solutionComponentId: existing[0].solutioncomponentid, response: responseSummary(response) });
+        } else {
+          audit.actual.solutionComponents.push({ component: component.label, componentId: component.id, componentType: component.type, status: "alreadyExistsAndValid", solutionComponentId: existing[0].solutioncomponentid });
+        }
       } else {
         throw new Error(`Blocked: duplicate solution components for ${component.label}.`);
       }
     }
+    const finalImageComponents = imageIds.length
+      ? (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${COMPONENT_TYPES.image} and (${imageIds.map((id) => `objectid eq ${id}`).join(" or ")})`)).value || []
+      : [];
+    const finalStepComponents = (await get(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,componenttype,objectid,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solution.solutionid} and componenttype eq ${COMPONENT_TYPES.step} and (${Object.values(stepIdByLogicalIdentifier).map((id) => `objectid eq ${id}`).join(" or ")})`)).value || [];
+    const stepRootById = new Map(finalStepComponents.map((component) => [lower(component.objectid), component]));
+    const directImageIdSet = new Set(finalImageComponents.map((component) => lower(component.objectid)));
+    const unresolvedImages = audit.actual.images.filter((image) => !directImageIdSet.has(lower(image.id)) && Number(stepRootById.get(lower(stepIdByLogicalIdentifier[image.step]))?.rootcomponentbehavior) !== 0);
+    assert(unresolvedImages.length === 0, `Blocked: Image solution containment unresolved for ${unresolvedImages.map((image) => `${image.step}:${image.name}`).join(", ")}.`);
+    audit.actual.imageSolutionContainment = { directCount: finalImageComponents.length, expectedCount: imageIds.length, viaStepRootCount: imageIds.length - finalImageComponents.length, stepRootIncludesSubcomponents: finalStepComponents.filter((component) => Number(component.rootcomponentbehavior) === 0).length };
 
     const finalAssembly = await querySingle(get, `/api/data/v9.2/pluginassemblies(${assemblyId})?$select=pluginassemblyid,name,version,publickeytoken,isolationmode,sourcetype,ismanaged`, "final plugin assembly");
     const finalTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
