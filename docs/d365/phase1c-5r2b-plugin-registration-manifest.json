@@ -24,9 +24,21 @@
     "corePackaging": "Core source is linked into the Plugin assembly; no custom Core DLL is deployed."
   },
   "pluginTypes": [
-    "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
-    "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
-    "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin"
+    {
+      "typename": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
+      "name": "ActualTotalsPreValidationPlugin",
+      "friendlyName": "Actual Totals PreValidation Plugin"
+    },
+    {
+      "typename": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+      "name": "ActualTotalsPreOperationPlugin",
+      "friendlyName": "Actual Totals PreOperation Plugin"
+    },
+    {
+      "typename": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+      "name": "ActualTotalsPostOperationPlugin",
+      "friendlyName": "Actual Totals PostOperation Plugin"
+    }
   ],
   "filteringAttributes": [
     "aigw_aprilactualrevenue",

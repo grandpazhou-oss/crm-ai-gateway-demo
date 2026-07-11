@@ -5,11 +5,17 @@ import {
   buildPluginTypePayload,
   buildResumePlan,
   extractId,
+  validatePluginTypeDefinitions,
 } from "../scripts/dataverse/apply-phase1c5r2d1-registration.mjs";
 
 const primaryAssemblyId = "c4e5b181-767d-f111-ab0e-6045bd5b2c06";
 const uniqueAssemblyId = "fd140aae-4df4-11dd-bd17-0019b9312238";
 const pluginTypeId = "c4e5b181-767d-f111-ab0e-6045bd5b2c07";
+const pluginTypeDefinition = {
+  typename: "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+  name: "ActualTotalsPreOperationPlugin",
+  friendlyName: "Actual Totals PreOperation Plugin",
+};
 
 test("create response prefers pluginassemblyid over pluginassemblyidunique", () => {
   const id = extractId({ body: { pluginassemblyid: primaryAssemblyId, pluginassemblyidunique: uniqueAssemblyId }, headers: new Headers() }, "pluginassembly");
@@ -30,13 +36,36 @@ test("pluginassemblyidunique cannot substitute for the primary ID", () => {
 });
 
 test("Plugin Type binding uses only pluginassemblyid", () => {
-  const payload = buildPluginTypePayload("CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin", primaryAssemblyId);
+  const payload = buildPluginTypePayload(pluginTypeDefinition, primaryAssemblyId);
   assert.equal(payload["pluginassemblyid@odata.bind"], `/pluginassemblies(${primaryAssemblyId})`);
+  assert.equal(payload.typename, pluginTypeDefinition.typename);
+  assert.equal(payload.name, pluginTypeDefinition.name);
+  assert.equal(payload.friendlyname, pluginTypeDefinition.friendlyName);
   assert.doesNotMatch(JSON.stringify(payload), /pluginassemblyidunique/);
 });
 
 test("invalid assembly IDs are rejected before binding", () => {
-  assert.throws(() => buildPluginTypePayload("Example", uniqueAssemblyId.replace(/.$/, "x")), /primary pluginassemblyid/);
+  assert.throws(() => buildPluginTypePayload(pluginTypeDefinition, uniqueAssemblyId.replace(/.$/, "x")), /primary pluginassemblyid/);
+});
+
+test("Plugin Type definitions require stable unique friendly names", () => {
+  const definitions = [
+    { typename: "TypeA", name: "NameA", friendlyName: "Friendly A" },
+    { typename: "TypeB", name: "NameB", friendlyName: "Friendly B" },
+    { typename: "TypeC", name: "NameC", friendlyName: "Friendly C" },
+  ];
+  assert.deepEqual(validatePluginTypeDefinitions(definitions), definitions);
+  assert.throws(() => validatePluginTypeDefinitions(definitions.map((item, index) => index === 2 ? { ...item, friendlyName: "" } : item)), /friendlyName/);
+  assert.throws(() => validatePluginTypeDefinitions(definitions.map((item, index) => index === 2 ? { ...item, friendlyName: "Friendly A" } : item)), /friendlyNames must be unique/);
+});
+
+test("manifest Plugin Type definitions carry typename, name and friendlyName", async () => {
+  const manifest = JSON.parse(await fs.readFile(new URL("../docs/d365/phase1c-5r2b-plugin-registration-manifest.json", import.meta.url), "utf8"));
+  assert.equal(validatePluginTypeDefinitions(manifest.pluginTypes).length, 3);
+  for (const definition of manifest.pluginTypes) {
+    const payload = buildPluginTypePayload(definition, primaryAssemblyId);
+    assert.equal(payload.friendlyname, definition.friendlyName);
+  }
 });
 
 test("resume plan reuses exactly one existing assembly", () => {
@@ -100,7 +129,7 @@ test("resume executor does not contain an Assembly content upload", async () => 
 });
 
 test("frozen primary Assembly ID is a normal Dataverse GUID", () => {
-  const payload = buildPluginTypePayload("Example", primaryAssemblyId);
+  const payload = buildPluginTypePayload({ typename: "Example", name: "Example", friendlyName: "Example Friendly" }, primaryAssemblyId);
   assert.equal(payload["pluginassemblyid@odata.bind"].includes(uniqueAssemblyId), false);
   assert.equal(payload["pluginassemblyid@odata.bind"].includes(pluginTypeId), false);
 });

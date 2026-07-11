@@ -18,7 +18,7 @@ const EXPECTED_TOKEN = "0350f79ae25dc991";
 const EXPECTED_SHA256 = "a02db984606827396467b7311f3024b586e33f4d3a024e3cb240e39ba91c6b7d";
 const MANIFEST_PATH = path.join(ROOT, "docs/d365/phase1c-5r2b-plugin-registration-manifest.json");
 const COMPONENT_TYPES = { pluginType: 90, pluginAssembly: 91, step: 92, image: 93 };
-const EXPECTED_PLUGIN_TYPES = [
+const EXPECTED_PLUGIN_TYPE_NAMES = [
   "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
   "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
   "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
@@ -95,9 +95,32 @@ function buildStepPayload(step, messageId, filterId, pluginTypeId) {
   return payload;
 }
 
-function buildPluginTypePayload(typename, assemblyId) {
+function validatePluginTypeDefinition(definition) {
+  assert(definition && typeof definition === "object", "Plugin Type definition is required.");
+  assert(typeof definition.typename === "string" && definition.typename.length > 0, "Plugin Type typename is required.");
+  assert(typeof definition.name === "string" && definition.name.length > 0, `Plugin Type name is required for ${definition.typename || "unknown"}.`);
+  assert(typeof definition.friendlyName === "string" && definition.friendlyName.trim().length > 0, `Plugin Type friendlyName is required for ${definition.typename || "unknown"}.`);
+  return definition;
+}
+
+function validatePluginTypeDefinitions(definitions) {
+  assert(Array.isArray(definitions) && definitions.length === 3, "Manifest must define exactly three Plugin Types.");
+  for (const definition of definitions) validatePluginTypeDefinition(definition);
+  assert(unique(definitions.map((definition) => definition.typename)).length === definitions.length, "Plugin Type typenames must be unique.");
+  assert(unique(definitions.map((definition) => definition.name)).length === definitions.length, "Plugin Type names must be unique.");
+  assert(unique(definitions.map((definition) => definition.friendlyName)).length === definitions.length, "Plugin Type friendlyNames must be unique.");
+  return definitions;
+}
+
+function buildPluginTypePayload(definition, assemblyId) {
   assert(isGuid(assemblyId), "Plugin Type binding requires the primary pluginassemblyid.");
-  return { typename, "pluginassemblyid@odata.bind": `/pluginassemblies(${assemblyId})` };
+  validatePluginTypeDefinition(definition);
+  return {
+    typename: definition.typename,
+    name: definition.name,
+    friendlyname: definition.friendlyName,
+    "pluginassemblyid@odata.bind": `/pluginassemblies(${assemblyId})`,
+  };
 }
 
 function buildResumePlan({ assemblyCount, pluginTypeCount, stepCount, imageCount }) {
@@ -110,7 +133,7 @@ function buildResumePlan({ assemblyCount, pluginTypeCount, stepCount, imageCount
     createAssembly: false,
     updateAssembly: false,
     deleteAssembly: false,
-    plannedPluginTypes: EXPECTED_PLUGIN_TYPES.length,
+    plannedPluginTypes: 3,
     plannedSteps: 7,
     plannedImages: 6,
     plannedEnabledSteps: 0,
@@ -139,6 +162,8 @@ export async function main(argv = process.argv.slice(2)) {
   const manifest = await readJson(MANIFEST_PATH);
   assert(manifest.solution === SOLUTION && manifest.primaryEntity === PRIMARY_ENTITY, "Registration manifest target mismatch.");
   assert(manifest.pluginTypes?.length === 3 && manifest.steps?.length === 7, "Registration manifest must contain 3 Plugin Types and 7 Steps.");
+  const pluginTypeDefinitions = validatePluginTypeDefinitions(manifest.pluginTypes);
+  const expectedPluginTypeNames = pluginTypeDefinitions.map((definition) => definition.typename);
   assert(manifest.artifact?.publicKeyToken === EXPECTED_TOKEN, "Manifest public key token mismatch.");
   assert(manifest.artifact?.sha256 === EXPECTED_SHA256, "Manifest DLL SHA-256 mismatch.");
   assert(manifest.artifact?.source && !path.isAbsolute(manifest.artifact.source), "Artifact source must be a project-relative path.");
@@ -152,7 +177,7 @@ export async function main(argv = process.argv.slice(2)) {
   assert(buildManifest.deployable === true, "Frozen build manifest is not deployable.");
   assert(buildManifest.publicKeyToken === EXPECTED_TOKEN && assemblyInspection.publicKeyToken === EXPECTED_TOKEN, "Frozen public key token mismatch.");
   assert(assemblyInspection.assemblyName === ASSEMBLY_NAME && assemblyInspection.passed === true, "Frozen assembly inspection failed.");
-  assert(unique(assemblyInspection.expectedPluginTypes || []).sort().join("|") === EXPECTED_PLUGIN_TYPES.slice().sort().join("|"), "Frozen plugin type list mismatch.");
+  assert(unique(assemblyInspection.expectedPluginTypes || []).sort().join("|") === EXPECTED_PLUGIN_TYPE_NAMES.slice().sort().join("|"), "Frozen plugin type list mismatch.");
 
   const auditDir = path.join(ROOT, "local-artifacts/d365/plugin-registration", `phase1c5r2d1_${stamp()}`);
   await fs.mkdir(auditDir, { recursive: true });
@@ -168,7 +193,7 @@ export async function main(argv = process.argv.slice(2)) {
     writeRequests: 0,
     writeCounts: { pluginAssemblyPost: 0, pluginTypePost: 0, stepPost: 0, stepPatch: 0, imagePost: 0, solutionComponentPost: 0 },
     errors: [],
-    expected: { pluginTypes: EXPECTED_PLUGIN_TYPES, steps: manifest.steps.map((step) => step.logicalIdentifier), images: manifest.steps.flatMap((step) => step.images.map((image) => `${step.logicalIdentifier}:${image.name}`)) },
+    expected: { pluginTypes: pluginTypeDefinitions, steps: manifest.steps.map((step) => step.logicalIdentifier), images: manifest.steps.flatMap((step) => step.images.map((image) => `${step.logicalIdentifier}:${image.name}`)) },
     actual: { pluginAssembly: null, pluginTypes: [], steps: [], images: [], solutionComponents: [] },
     publishExecuted: false,
     businessDataWrites: 0,
@@ -222,7 +247,7 @@ export async function main(argv = process.argv.slice(2)) {
     audit.solutionId = solution.solutionid;
 
     const assemblyRows = (await get(`/api/data/v9.2/pluginassemblies?$select=pluginassemblyid,pluginassemblyidunique,name,version,publickeytoken,isolationmode,sourcetype,ismanaged&$filter=name eq '${ASSEMBLY_NAME}'`)).value || [];
-    const typeRows = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=${EXPECTED_PLUGIN_TYPES.map((name) => `typename eq '${name}'`).join(" or ")}`)).value || [];
+    const typeRows = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=${expectedPluginTypeNames.map((name) => `typename eq '${name}'`).join(" or ")}`)).value || [];
     const stepRows = (await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value&$filter=${manifest.steps.map((step) => `name eq '${step.displayName}'`).join(" or ")}`)).value || [];
     assert(assemblyRows.length === 1, `Resume requires exactly one matching Plugin Assembly, got ${assemblyRows.length}.`);
     assert(typeRows.length === 0, `Blocked: existing matching Plugin Type count=${typeRows.length}.`);
@@ -250,21 +275,23 @@ export async function main(argv = process.argv.slice(2)) {
       return;
     }
 
-    let pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
+    let pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
     if (pluginTypes.length === 0) {
-      for (const typename of EXPECTED_PLUGIN_TYPES) {
-        const response = await post("/api/data/v9.2/plugintypes", buildPluginTypePayload(typename, assemblyId), "pluginTypePost");
+      for (const definition of pluginTypeDefinitions) {
+        const response = await post("/api/data/v9.2/plugintypes", buildPluginTypePayload(definition, assemblyId), "pluginTypePost");
         const id = extractId(response, "plugintype");
-        audit.actual.pluginTypes.push({ id, typename, status: "created" });
+        const created = await querySingle(get, `/api/data/v9.2/plugintypes(${id})?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value`, `Plugin Type ${definition.typename}`);
+        assert(created.typename === definition.typename && created.name === definition.name && created.friendlyname === definition.friendlyName && lower(created._pluginassemblyid_value) === lower(assemblyId), `Plugin Type readback mismatch for ${definition.typename}.`);
+        audit.actual.pluginTypes.push({ id, typename: created.typename, name: created.name, friendlyname: created.friendlyname, assemblyLookup: created._pluginassemblyid_value, status: "created" });
       }
-      pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
+      pluginTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
     } else {
-      audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, status: "alreadyCreatedByAssembly" }));
+      audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, name: type.name, friendlyname: type.friendlyname, assemblyLookup: type._pluginassemblyid_value, status: "alreadyCreatedByAssembly" }));
     }
-    assert(pluginTypes.length === EXPECTED_PLUGIN_TYPES.length, `Blocked: expected 3 Plugin Types, got ${pluginTypes.length}.`);
-    assert(unique(pluginTypes.map((type) => type.typename)).sort().join("|") === EXPECTED_PLUGIN_TYPES.slice().sort().join("|"), "Plugin Type names mismatch after assembly registration.");
+    assert(pluginTypes.length === pluginTypeDefinitions.length, `Blocked: expected 3 Plugin Types, got ${pluginTypes.length}.`);
+    assert(unique(pluginTypes.map((type) => type.typename)).sort().join("|") === expectedPluginTypeNames.slice().sort().join("|"), "Plugin Type names mismatch after assembly registration.");
     const pluginTypeByName = Object.fromEntries(pluginTypes.map((type) => [type.typename, type.plugintypeid]));
-    audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, status: audit.actual.pluginTypes.find((item) => item.id === type.plugintypeid)?.status || "verified" }));
+    audit.actual.pluginTypes = pluginTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, name: type.name, friendlyname: type.friendlyname, assemblyLookup: type._pluginassemblyid_value, status: audit.actual.pluginTypes.find((item) => item.id === type.plugintypeid)?.status || "verified" }));
 
     const stepIdByLogicalIdentifier = {};
     for (const step of manifest.steps) {
@@ -327,7 +354,7 @@ export async function main(argv = process.argv.slice(2)) {
     }
 
     const finalAssembly = await querySingle(get, `/api/data/v9.2/pluginassemblies(${assemblyId})?$select=pluginassemblyid,name,version,publickeytoken,isolationmode,sourcetype,ismanaged`, "final plugin assembly");
-    const finalTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
+    const finalTypes = (await get(`/api/data/v9.2/plugintypes?$select=plugintypeid,typename,name,friendlyname,_pluginassemblyid_value&$filter=_pluginassemblyid_value eq ${assemblyId}`)).value || [];
     const finalSteps = (await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,stage,mode,statecode,statuscode,rank,filteringattributes,_plugintypeid_value,_sdkmessageid_value,_sdkmessagefilterid_value&$filter=_plugintypeid_value eq ${pluginTypeByName[manifest.steps[0].pluginType]}`)).value || [];
     const finalImages = [];
     for (const stepId of Object.values(stepIdByLogicalIdentifier)) {
@@ -337,7 +364,7 @@ export async function main(argv = process.argv.slice(2)) {
     audit.completedAtUtc = new Date().toISOString();
     audit.status = "success";
     await saveAudit();
-    console.log(JSON.stringify({ status: "success", auditDir, assemblyId, pluginTypeIds: finalTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename })), stepIds: audit.actual.steps.map((step) => ({ id: step.id, logicalIdentifier: step.logicalIdentifier, statecode: step.statecode, statuscode: step.statuscode })), imageCount: finalImages.length, writeRequests: audit.writeRequests, writeCounts: audit.writeCounts, publishExecuted: false, businessDataWrites: 0, productionRequests: 0 }, null, 2));
+    console.log(JSON.stringify({ status: "success", auditDir, assemblyId, pluginTypes: finalTypes.map((type) => ({ id: type.plugintypeid, typename: type.typename, name: type.name, friendlyname: type.friendlyname, assemblyLookup: type._pluginassemblyid_value })), stepIds: audit.actual.steps.map((step) => ({ id: step.id, logicalIdentifier: step.logicalIdentifier, statecode: step.statecode, statuscode: step.statuscode })), imageCount: finalImages.length, writeRequests: audit.writeRequests, writeCounts: audit.writeCounts, publishExecuted: false, businessDataWrites: 0, productionRequests: 0 }, null, 2));
   } catch (error) {
     audit.status = "blocked";
     audit.completedAtUtc = new Date().toISOString();
@@ -349,4 +376,4 @@ export async function main(argv = process.argv.slice(2)) {
 
 runDataverseCli(import.meta.url, main);
 
-export { buildPluginTypePayload, buildResumePlan, extractId };
+export { buildPluginTypePayload, buildResumePlan, extractId, validatePluginTypeDefinitions };
