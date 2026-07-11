@@ -2,17 +2,32 @@
   "phase": "1C-5R2B",
   "dryRun": true,
   "executable": false,
-  "targetEnvironment": "https://your-org.crm.dynamics.com",
+  "registrationAuthorized": false,
+  "targetEnvironment": "https://your-test-org.crm.dynamics.com",
   "solution": "CRMAIGatewayDemo",
-  "assembly": {
-    "name": "CrmAiGateway.ActualTotals.Plugin",
+  "primaryEntity": "aigw_actualmanagement",
+  "artifact": {
+    "runId": "29157898543",
+    "commitSha": "8ab2b5d17de64d6a99adaaa57caf9de1d6d868e9",
+    "assemblyName": "CrmAiGateway.ActualTotals.Plugin",
+    "dllFileName": "CrmAiGateway.ActualTotals.Plugin.dll",
     "targetFramework": "net462",
-    "sourceProject": "plugins/ActualTotals/src/CrmAiGateway.ActualTotals.Plugin/CrmAiGateway.ActualTotals.Plugin.csproj",
-    "deployment": "Sandbox / Database",
+    "configuration": "Release",
+    "sha256": "a02db984606827396467b7311f3024b586e33f4d3a024e3cb240e39ba91c6b7d",
+    "publicKeyToken": "0350f79ae25dc991",
+    "isolation": "Sandbox",
+    "isolationCode": 2,
+    "deployment": "Server",
+    "deploymentCode": 0,
+    "source": "plugins/ActualTotals/.ci/github-run-29157898543/CrmAiGateway.ActualTotals.Plugin.dll",
     "customAssemblyDependencies": [],
-    "corePackaging": "Core source is linked into the plugin project and compiled into the same DLL",
-    "registrationAuthorized": false
+    "corePackaging": "Core source is linked into the Plugin assembly; no custom Core DLL is deployed."
   },
+  "pluginTypes": [
+    "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
+    "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+    "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin"
+  ],
   "filteringAttributes": [
     "aigw_aprilactualrevenue",
     "aigw_mayactualrevenue",
@@ -33,32 +48,279 @@
     "aigw_annualactualrevenue",
     "aigw_yearrevenueactual",
     "aigw_yearrevenueactualcny",
+    "GP fields",
+    "MP fields",
+    "statecode",
+    "statuscode",
+    "modifiedon",
+    "createdon",
+    "ownerid",
     "any _base field"
+  ],
+  "imageFieldSet": [
+    "aigw_opportunityid",
+    "transactioncurrencyid",
+    "aigw_annualactualrevenue",
+    "aigw_aprilactualrevenue",
+    "aigw_mayactualrevenue",
+    "aigw_juneactualrevenue",
+    "aigw_julyactualrevenue",
+    "aigw_augustactualrevenue",
+    "aigw_septemberactualrevenue",
+    "aigw_octoberactualrevenue",
+    "aigw_novemberactualrevenue",
+    "aigw_decemberactualrevenue",
+    "aigw_januaryactualrevenue",
+    "aigw_februaryactualrevenue",
+    "aigw_marchactualrevenue"
   ],
   "steps": [
     {
-      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
+      "logicalIdentifier": "actualTotals.preValidation.create",
+      "displayName": "Actual Totals - PreValidation - Create",
+      "pluginType": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
       "message": "Create",
-      "table": "aigw_actualmanagement",
+      "primaryEntity": "aigw_actualmanagement",
       "stage": 10,
-      "mode": "Synchronous",
+      "stageName": "PreValidation",
+      "mode": 0,
+      "modeName": "Synchronous",
+      "deployment": "Server",
+      "deploymentCode": 0,
+      "isolation": "Sandbox",
       "rank": 10,
-      "filteringAttributes": [],
-      "images": []
+      "filteringAttributes": null,
+      "images": [],
+      "initialState": "Disabled",
+      "businessPurpose": "Require a valid Opportunity, matching currency, and the one-child-per-Opportunity invariant."
     },
     {
-      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
+      "logicalIdentifier": "actualTotals.preValidation.update",
+      "displayName": "Actual Totals - PreValidation - Update",
+      "pluginType": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreValidationPlugin",
       "message": "Update",
-      "table": "aigw_actualmanagement",
+      "primaryEntity": "aigw_actualmanagement",
       "stage": 10,
-      "mode": "Synchronous",
+      "stageName": "PreValidation",
+      "mode": 0,
+      "modeName": "Synchronous",
+      "deployment": "Server",
+      "deploymentCode": 0,
+      "isolation": "Sandbox",
       "rank": 10,
-      "filteringAttributesFromRoot": true,
+      "filteringAttributes": [
+        "aigw_aprilactualrevenue",
+        "aigw_mayactualrevenue",
+        "aigw_juneactualrevenue",
+        "aigw_julyactualrevenue",
+        "aigw_augustactualrevenue",
+        "aigw_septemberactualrevenue",
+        "aigw_octoberactualrevenue",
+        "aigw_novemberactualrevenue",
+        "aigw_decemberactualrevenue",
+        "aigw_januaryactualrevenue",
+        "aigw_februaryactualrevenue",
+        "aigw_marchactualrevenue",
+        "aigw_opportunityid",
+        "transactioncurrencyid"
+      ],
+      "images": [{
+        "name": "PreImage",
+        "type": "PreImage",
+        "alias": "PreImage",
+        "fields": [
+          "aigw_opportunityid",
+          "transactioncurrencyid",
+          "aigw_annualactualrevenue",
+          "aigw_aprilactualrevenue",
+          "aigw_mayactualrevenue",
+          "aigw_juneactualrevenue",
+          "aigw_julyactualrevenue",
+          "aigw_augustactualrevenue",
+          "aigw_septemberactualrevenue",
+          "aigw_octoberactualrevenue",
+          "aigw_novemberactualrevenue",
+          "aigw_decemberactualrevenue",
+          "aigw_januaryactualrevenue",
+          "aigw_februaryactualrevenue",
+          "aigw_marchactualrevenue"
+        ]
+      }],
+      "initialState": "Disabled",
+      "businessPurpose": "Validate the merged old/new child state before an update, including reparent and currency checks."
+    },
+    {
+      "logicalIdentifier": "actualTotals.preOperation.create",
+      "displayName": "Actual Totals - PreOperation - Create",
+      "pluginType": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+      "message": "Create",
+      "primaryEntity": "aigw_actualmanagement",
+      "stage": 20,
+      "stageName": "PreOperation",
+      "mode": 0,
+      "modeName": "Synchronous",
+      "deployment": "Server",
+      "deploymentCode": 0,
+      "isolation": "Sandbox",
+      "rank": 20,
+      "filteringAttributes": null,
+      "images": [],
+      "initialState": "Disabled",
+      "businessPurpose": "Calculate the child annual Revenue from April through March before persistence."
+    },
+    {
+      "logicalIdentifier": "actualTotals.preOperation.update",
+      "displayName": "Actual Totals - PreOperation - Update",
+      "pluginType": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
+      "message": "Update",
+      "primaryEntity": "aigw_actualmanagement",
+      "stage": 20,
+      "stageName": "PreOperation",
+      "mode": 0,
+      "modeName": "Synchronous",
+      "deployment": "Server",
+      "deploymentCode": 0,
+      "isolation": "Sandbox",
+      "rank": 20,
+      "filteringAttributes": [
+        "aigw_aprilactualrevenue",
+        "aigw_mayactualrevenue",
+        "aigw_juneactualrevenue",
+        "aigw_julyactualrevenue",
+        "aigw_augustactualrevenue",
+        "aigw_septemberactualrevenue",
+        "aigw_octoberactualrevenue",
+        "aigw_novemberactualrevenue",
+        "aigw_decemberactualrevenue",
+        "aigw_januaryactualrevenue",
+        "aigw_februaryactualrevenue",
+        "aigw_marchactualrevenue",
+        "aigw_opportunityid",
+        "transactioncurrencyid"
+      ],
+      "images": [{
+        "name": "PreImage",
+        "type": "PreImage",
+        "alias": "PreImage",
+        "fields": [
+          "aigw_opportunityid",
+          "transactioncurrencyid",
+          "aigw_annualactualrevenue",
+          "aigw_aprilactualrevenue",
+          "aigw_mayactualrevenue",
+          "aigw_juneactualrevenue",
+          "aigw_julyactualrevenue",
+          "aigw_augustactualrevenue",
+          "aigw_septemberactualrevenue",
+          "aigw_octoberactualrevenue",
+          "aigw_novemberactualrevenue",
+          "aigw_decemberactualrevenue",
+          "aigw_januaryactualrevenue",
+          "aigw_februaryactualrevenue",
+          "aigw_marchactualrevenue"
+        ]
+      }],
+      "initialState": "Disabled",
+      "businessPurpose": "Calculate the child annual Revenue from the complete merged month set without updating the child through the service."
+    },
+    {
+      "logicalIdentifier": "actualTotals.postOperation.create",
+      "displayName": "Actual Totals - PostOperation - Create",
+      "pluginType": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+      "message": "Create",
+      "primaryEntity": "aigw_actualmanagement",
+      "stage": 40,
+      "stageName": "PostOperation",
+      "mode": 0,
+      "modeName": "Synchronous",
+      "deployment": "Server",
+      "deploymentCode": 0,
+      "isolation": "Sandbox",
+      "rank": 30,
+      "filteringAttributes": null,
+      "images": [{
+        "name": "PostImage",
+        "type": "PostImage",
+        "alias": "PostImage",
+        "fields": [
+          "aigw_opportunityid",
+          "transactioncurrencyid",
+          "aigw_annualactualrevenue",
+          "aigw_aprilactualrevenue",
+          "aigw_mayactualrevenue",
+          "aigw_juneactualrevenue",
+          "aigw_julyactualrevenue",
+          "aigw_augustactualrevenue",
+          "aigw_septemberactualrevenue",
+          "aigw_octoberactualrevenue",
+          "aigw_novemberactualrevenue",
+          "aigw_decemberactualrevenue",
+          "aigw_januaryactualrevenue",
+          "aigw_februaryactualrevenue",
+          "aigw_marchactualrevenue"
+        ]
+      }],
+      "initialState": "Disabled",
+      "businessPurpose": "Recalculate the related Opportunity after the child is created."
+    },
+    {
+      "logicalIdentifier": "actualTotals.postOperation.update",
+      "displayName": "Actual Totals - PostOperation - Update",
+      "pluginType": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+      "message": "Update",
+      "primaryEntity": "aigw_actualmanagement",
+      "stage": 40,
+      "stageName": "PostOperation",
+      "mode": 0,
+      "modeName": "Synchronous",
+      "deployment": "Server",
+      "deploymentCode": 0,
+      "isolation": "Sandbox",
+      "rank": 30,
+      "filteringAttributes": [
+        "aigw_aprilactualrevenue",
+        "aigw_mayactualrevenue",
+        "aigw_juneactualrevenue",
+        "aigw_julyactualrevenue",
+        "aigw_augustactualrevenue",
+        "aigw_septemberactualrevenue",
+        "aigw_octoberactualrevenue",
+        "aigw_novemberactualrevenue",
+        "aigw_decemberactualrevenue",
+        "aigw_januaryactualrevenue",
+        "aigw_februaryactualrevenue",
+        "aigw_marchactualrevenue",
+        "aigw_opportunityid",
+        "transactioncurrencyid"
+      ],
       "images": [
         {
           "name": "PreImage",
           "type": "PreImage",
-          "attributes": [
+          "alias": "PreImage",
+          "fields": [
+            "aigw_opportunityid",
+            "transactioncurrencyid",
+            "aigw_annualactualrevenue",
+            "aigw_aprilactualrevenue",
+            "aigw_mayactualrevenue",
+            "aigw_juneactualrevenue",
+            "aigw_julyactualrevenue",
+            "aigw_augustactualrevenue",
+            "aigw_septemberactualrevenue",
+            "aigw_octoberactualrevenue",
+            "aigw_novemberactualrevenue",
+            "aigw_decemberactualrevenue",
+            "aigw_januaryactualrevenue",
+            "aigw_februaryactualrevenue",
+            "aigw_marchactualrevenue"
+          ]
+        },
+        {
+          "name": "PostImage",
+          "type": "PostImage",
+          "alias": "PostImage",
+          "fields": [
             "aigw_opportunityid",
             "transactioncurrencyid",
             "aigw_annualactualrevenue",
@@ -76,86 +338,49 @@
             "aigw_marchactualrevenue"
           ]
         }
-      ]
+      ],
+      "initialState": "Disabled",
+      "businessPurpose": "Recalculate the old and new Opportunity after a child update, including reparenting."
     },
     {
-      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
-      "message": "Create",
-      "table": "aigw_actualmanagement",
-      "stage": 20,
-      "mode": "Synchronous",
-      "rank": 20,
-      "filteringAttributes": [],
-      "images": []
-    },
-    {
-      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPreOperationPlugin",
-      "message": "Update",
-      "table": "aigw_actualmanagement",
-      "stage": 20,
-      "mode": "Synchronous",
-      "rank": 20,
-      "filteringAttributesFromRoot": true,
-      "images": [
-        {
-          "name": "PreImage",
-          "type": "PreImage",
-          "attributesFrom": "PreValidation Update PreImage"
-        }
-      ]
-    },
-    {
-      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
-      "message": "Create",
-      "table": "aigw_actualmanagement",
-      "stage": 40,
-      "mode": "Synchronous",
-      "rank": 30,
-      "filteringAttributes": [],
-      "images": [
-        {
-          "name": "PostImage",
-          "type": "PostImage",
-          "attributes": ["aigw_opportunityid", "transactioncurrencyid", "aigw_annualactualrevenue"]
-        }
-      ]
-    },
-    {
-      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
-      "message": "Update",
-      "table": "aigw_actualmanagement",
-      "stage": 40,
-      "mode": "Synchronous",
-      "rank": 30,
-      "filteringAttributesFromRoot": true,
-      "images": [
-        {
-          "name": "PreImage",
-          "type": "PreImage",
-          "attributes": ["aigw_opportunityid"]
-        },
-        {
-          "name": "PostImage",
-          "type": "PostImage",
-          "attributes": ["aigw_opportunityid", "aigw_annualactualrevenue"]
-        }
-      ]
-    },
-    {
-      "class": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
+      "logicalIdentifier": "actualTotals.postOperation.delete",
+      "displayName": "Actual Totals - PostOperation - Delete",
+      "pluginType": "CrmAiGateway.ActualTotals.Plugin.ActualTotalsPostOperationPlugin",
       "message": "Delete",
-      "table": "aigw_actualmanagement",
+      "primaryEntity": "aigw_actualmanagement",
       "stage": 40,
-      "mode": "Synchronous",
+      "stageName": "PostOperation",
+      "mode": 0,
+      "modeName": "Synchronous",
+      "deployment": "Server",
+      "deploymentCode": 0,
+      "isolation": "Sandbox",
       "rank": 30,
-      "filteringAttributes": [],
-      "images": [
-        {
-          "name": "PreImage",
-          "type": "PreImage",
-          "attributes": ["aigw_opportunityid"]
-        }
-      ]
+      "filteringAttributes": null,
+      "images": [{
+        "name": "PreImage",
+        "type": "PreImage",
+        "alias": "PreImage",
+        "fields": [
+          "aigw_opportunityid",
+          "transactioncurrencyid",
+          "aigw_annualactualrevenue",
+          "aigw_aprilactualrevenue",
+          "aigw_mayactualrevenue",
+          "aigw_juneactualrevenue",
+          "aigw_julyactualrevenue",
+          "aigw_augustactualrevenue",
+          "aigw_septemberactualrevenue",
+          "aigw_octoberactualrevenue",
+          "aigw_novemberactualrevenue",
+          "aigw_decemberactualrevenue",
+          "aigw_januaryactualrevenue",
+          "aigw_februaryactualrevenue",
+          "aigw_marchactualrevenue"
+        ]
+      }],
+      "initialState": "Disabled",
+      "businessPurpose": "Recalculate the old Opportunity after a child is deleted."
     }
   ],
   "writeSurface": {
@@ -166,15 +391,26 @@
   "preDeploymentGates": [
     "dotnet test passes offline",
     "net462 Release assembly builds",
-    "assembly identity and strong-name/package strategy confirmed",
-    "all field metadata re-read and matches manifest",
-    "all seven steps and images reviewed",
+    "assembly identity, SHA-256, and strong-name token match the frozen Artifact",
+    "all target table, field, relationship, and currency metadata are re-read and match",
+    "all seven disabled steps and images are reviewed",
     "Phase 1C-5 seed remains blocked"
   ],
-  "rollback": {
-    "automatic": false,
-    "requiresSeparateAuthorization": true,
-    "order": ["disable new steps", "remove new images", "remove new steps", "remove assembly only after dependency check"],
-    "data": "No data is created by registration. Parent totals are recalculated during Phase 1C-5R4 validation."
-  }
+  "rollbackOrder": [
+    "disable new steps",
+    "remove new images",
+    "remove new steps",
+    "remove plugin types if the tool requires it",
+    "remove assembly only after dependency verification"
+  ],
+  "rollbackRequiresSeparateAuthorization": true,
+  "dataverse": {
+    "connected": false,
+    "registration": false,
+    "stepsCreated": false,
+    "imagesCreated": false,
+    "publish": false,
+    "dataWrites": false
+  },
+  "seedBlocked": true
 }
