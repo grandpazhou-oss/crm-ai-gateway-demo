@@ -2,22 +2,25 @@ name: Actual Totals Plugin Windows CI
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "plugins/ActualTotals/**"
-      - "docs/d365/phase1c-5r2a-ci-manifest.json"
-      - ".github/workflows/actual-totals-plugin-windows-ci.yml"
-      - "package.json"
-      - "package-lock.json"
-  pull_request:
-    paths:
-      - "plugins/ActualTotals/**"
-      - "docs/d365/phase1c-5r2b-plugin-registration-manifest.json"
-      - ".github/workflows/actual-totals-plugin-windows-ci.yml"
-      - "package.json"
-      - "package-lock.json"
+
+# Automatic triggers are intentionally disabled until the stable signing secret
+# is configured. Restore this block after the secret gate is complete.
+# push:
+#   branches:
+#     - main
+#   paths:
+#     - "plugins/ActualTotals/**"
+#     - "docs/d365/phase1c-5r2a-ci-manifest.json"
+#     - ".github/workflows/actual-totals-plugin-windows-ci.yml"
+#     - "package.json"
+#     - "package-lock.json"
+# pull_request:
+#   paths:
+#     - "plugins/ActualTotals/**"
+#     - "docs/d365/phase1c-5r2b-plugin-registration-manifest.json"
+#     - ".github/workflows/actual-totals-plugin-windows-ci.yml"
+#     - "package.json"
+#     - "package-lock.json"
 
 permissions:
   contents: read
