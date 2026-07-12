@@ -282,7 +282,7 @@ export async function main() {
     };
     const readActual = (id, fields = ["aigw_annualactualrevenue", ...MONTH_REVENUE_FIELDS]) => get(`/api/data/v9.2/${bindings.actualManagement.entitySetName}(${id})?$select=${fields.join(",")}`);
     const readParent = (id) => get(`/api/data/v9.2/${bindings.opportunity.entitySetName}(${id})?$select=${PARENT_SELECT}`);
-    const expectedResult = (name, input, expected, actual, parentBefore, parentAfter, extra = {}) => ({ name, passed: true, input, expectedAnnual: expected, actualAnnual: moneyValue(actual.aigw_annualactualrevenue), parentBefore, parentAfter, parentUnchanged: true, ...extra });
+    const expectedResult = (input, expected, actual, parentBefore, parentAfter, extra = {}) => ({ passed: true, input, expectedAnnual: expected, actualAnnual: moneyValue(actual.aigw_annualactualrevenue), parentBefore, parentAfter, parentUnchanged: true, ...extra });
     const runTest = async (name, action) => {
       try {
         const result = await action();
@@ -301,7 +301,7 @@ export async function main() {
       const actual = await readActual(childId);
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 0, moneyPrecision) || !sameMoney(parentBefore.aigw_yearrevenueactual, parentAfter.aigw_yearrevenueactual)) throw new Error("Null Revenue Create total or parent invariant failed.");
-      return expectedResult(name, "12 null values", 0, actual, parentBefore, parentAfter);
+      return expectedResult("12 null values", 0, actual, parentBefore, parentAfter);
     });
 
     await runTest("Test 2 Create one month", async () => {
@@ -313,7 +313,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 100.25, moneyPrecision)) throw new Error("One-month Revenue total mismatch.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, input, 100.25, actual, parentBefore, parentAfter);
+      return expectedResult(input, 100.25, actual, parentBefore, parentAfter);
     });
 
     await runTest("Test 3 Create integer 12-month sum", async () => {
@@ -325,7 +325,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 7800, moneyPrecision)) throw new Error("Integer 12-month Revenue total mismatch.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, input, 7800, actual, parentBefore, parentAfter);
+      return expectedResult(input, 7800, actual, parentBefore, parentAfter);
     });
 
     await runTest("Test 4 Create decimal sum", async () => {
@@ -337,7 +337,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 60.60, moneyPrecision)) throw new Error("Decimal Revenue total mismatch.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, input, 60.60, actual, parentBefore, parentAfter);
+      return expectedResult(input, 60.60, actual, parentBefore, parentAfter);
     });
 
     const canMidpoint = moneyPrecision >= 2 && MONTH_REVENUE_FIELDS.every((field) => Number(attributeMetadata[field].Precision ?? 2) >= 3) && Number(attributeMetadata.aigw_aprilactualrevenue.MinValue) <= 0 && Number(attributeMetadata.aigw_aprilactualrevenue.MaxValue) >= 1.005 && Number(attributeMetadata.aigw_annualactualrevenue.MinValue) <= 0 && Number(attributeMetadata.aigw_annualactualrevenue.MaxValue) >= 1.01;
@@ -351,7 +351,7 @@ export async function main() {
         const parentAfter = await readParent(opportunityId);
         if (!decimalEqual(actual.aigw_annualactualrevenue, 1.01, 2)) throw new Error("Positive midpoint did not round AwayFromZero.");
         assertParentUnchanged(parentBefore, parentAfter);
-        return expectedResult(name, input, 1.01, actual, parentBefore, parentAfter);
+        return expectedResult(input, 1.01, actual, parentBefore, parentAfter);
       });
     } else {
       audit.tests.push({ name: "Test 5 AwayFromZero positive midpoint", passed: true, status: "Not Executable Due To Source Precision", reason: "Online source or target Money precision/range cannot safely represent 1.005." });
@@ -368,7 +368,7 @@ export async function main() {
         const parentAfter = await readParent(opportunityId);
         if (!decimalEqual(actual.aigw_annualactualrevenue, -1.01, 2)) throw new Error("Negative midpoint did not round AwayFromZero.");
         assertParentUnchanged(parentBefore, parentAfter);
-        return expectedResult(name, input, -1.01, actual, parentBefore, parentAfter);
+        return expectedResult(input, -1.01, actual, parentBefore, parentAfter);
       });
     } else {
       audit.tests.push({ name: "Test 6 AwayFromZero negative midpoint", passed: true, status: "Not Executable Due To Metadata Precision", reason: "Online source or target Money precision/range cannot safely represent -1.005." });
@@ -383,7 +383,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 350, moneyPrecision) || !decimalEqual(actual.aigw_aprilactualrevenue, 100, moneyPrecision)) throw new Error("Single-month Update merge failed.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, { before: 300, update: { aigw_mayactualrevenue: 250 } }, 350, actual, parentBefore, parentAfter);
+      return expectedResult({ before: 300, update: { aigw_mayactualrevenue: 250 } }, 350, actual, parentBefore, parentAfter);
     });
 
     await runTest("Test 8 Update month to null", async () => {
@@ -395,7 +395,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 100, moneyPrecision) || actual.aigw_mayactualrevenue !== null) throw new Error("Clear-to-null Update failed.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, { before: 300, update: { aigw_mayactualrevenue: null } }, 100, actual, parentBefore, parentAfter);
+      return expectedResult({ before: 300, update: { aigw_mayactualrevenue: null } }, 100, actual, parentBefore, parentAfter);
     });
 
     await runTest("Test 9 Update multiple months", async () => {
@@ -407,7 +407,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 420, moneyPrecision)) throw new Error("Multi-month Update merge failed.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, { before: 60, update: { aigw_aprilactualrevenue: 100, aigw_juneactualrevenue: 300 } }, 420, actual, parentBefore, parentAfter);
+      return expectedResult({ before: 60, update: { aigw_aprilactualrevenue: 100, aigw_juneactualrevenue: 300 } }, 420, actual, parentBefore, parentAfter);
     });
 
     await runTest("Test 10 Update non-filtering field", async () => {
@@ -420,7 +420,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(after.aigw_annualactualrevenue, before.aigw_annualactualrevenue, moneyPrecision)) throw new Error("Non-filtering Update changed annual total.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, { field: "aigw_name" }, before.aigw_annualactualrevenue, after, parentBefore, parentAfter, { filteringAttributesHonored: true });
+      return expectedResult({ field: "aigw_name" }, before.aigw_annualactualrevenue, after, parentBefore, parentAfter, { filteringAttributesHonored: true });
     });
 
     await runTest("Test 11 Manual annual overwrite behavior", async () => {
@@ -432,7 +432,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 999999, moneyPrecision)) throw new Error("Manual annual overwrite was not preserved under current filtering configuration.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, { field: "aigw_annualactualrevenue", value: 999999 }, 999999, actual, parentBefore, parentAfter, { manualOverwriteAllowed: true, recommendation: "Keep the annual field read-only in the Form; do not add it to filtering without a separate design review." });
+      return expectedResult({ field: "aigw_annualactualrevenue", value: 999999 }, 999999, actual, parentBefore, parentAfter, { manualOverwriteAllowed: true, recommendation: "Keep the annual field read-only in the Form; do not add it to filtering without a separate design review." });
     });
 
     await runTest("Test 12 JPY child total", async () => {
@@ -444,7 +444,7 @@ export async function main() {
       const parentAfter = await readParent(opportunityId);
       if (!decimalEqual(actual.aigw_annualactualrevenue, 300, moneyPrecision)) throw new Error("JPY child total mismatch.");
       assertParentUnchanged(parentBefore, parentAfter);
-      return expectedResult(name, input, 300, actual, parentBefore, parentAfter, { currency: "JPY", baseFieldsWrittenExplicitly: false });
+      return expectedResult(input, 300, actual, parentBefore, parentAfter, { currency: "JPY", baseFieldsWrittenExplicitly: false });
     });
 
     for (const id of createdActualIds) {
