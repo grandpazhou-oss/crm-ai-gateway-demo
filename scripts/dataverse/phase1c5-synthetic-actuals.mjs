@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
 import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, runDataverseCli } from "./lib/environment-safety.mjs";
+import { resolveActualManagementBindings } from "./lib/dataverse-metadata-resolvers.mjs";
 import { buildSyntheticActual, MONEY_FIELDS, reconcileSyntheticActuals, TARGET_FIELDS } from "./lib/phase1c5-synthetic-actuals.mjs";
 
 let URL;
@@ -11,14 +12,14 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const stamp = () => new Date().toISOString().replace(/[-:.]/g, "").replace("Z", "Z");
 const escapeOData = (value) => value.replaceAll("'", "''");
 
-async function readState(client) {
+async function readState(client, entitySets) {
   const get = async (uri) => (await client.dataverseGet(uri)).body;
   const [entity, attributes, relationships, opportunities, actuals] = await Promise.all([
     get("/api/data/v9.2/EntityDefinitions(LogicalName='aigw_actualmanagement')?$select=LogicalName,EntitySetName,OwnershipType,IsManaged,PrimaryNameAttribute"),
     get("/api/data/v9.2/EntityDefinitions(LogicalName='aigw_actualmanagement')/Attributes?$select=LogicalName,AttributeType,IsValidForCreate,IsValidForUpdate,RequiredLevel"),
     get("/api/data/v9.2/RelationshipDefinitions/Microsoft.Dynamics.CRM.OneToManyRelationshipMetadata?$select=SchemaName,ReferencedEntity,ReferencingEntity,ReferencingAttribute,CascadeConfiguration&$filter=SchemaName eq 'aigw_opportunity_actualmanagement'"),
-    get("/api/data/v9.2/opportunities?$select=opportunityid,name,_transactioncurrencyid_value&$filter=contains(name,'AI-DEMO')&$orderby=name asc&$top=5000"),
-    get(`/api/data/v9.2/aigw_actualmanagements?$select=aigw_actualmanagementid,aigw_name,_aigw_opportunityid_value,_transactioncurrencyid_value,aigw_expectedorderdate,${MONEY_FIELDS.join(",")}&$top=5000`),
+    get(`/api/data/v9.2/${entitySets.opportunityEntitySetName}?$select=opportunityid,name,_transactioncurrencyid_value&$filter=contains(name,'AI-DEMO')&$orderby=name asc&$top=5000`),
+    get(`/api/data/v9.2/${entitySets.actualManagementEntitySetName}?$select=aigw_actualmanagementid,aigw_name,_aigw_opportunityid_value,_transactioncurrencyid_value,aigw_expectedorderdate,${MONEY_FIELDS.join(",")}&$top=5000`),
   ]);
   return { entity, attributes: attributes.value || [], relationship: relationships.value?.[0], opportunities: (opportunities.value || []).filter((row) => row.name?.startsWith("[AI-DEMO]")).map((row) => ({ ...row, transactioncurrencyid: row._transactioncurrencyid_value })), actuals: actuals.value || [] };
 }
@@ -48,11 +49,16 @@ export async function main() {
   const client = createDynamicsClient();
   if (client.config.dataverseUrl !== URL) throw new Error("Dataverse URL safety gate failed");
   if ((process.env.AI_PROVIDER || "demo") !== "demo" || (process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("AI safety gate failed");
-  const state = await readState(client);
+  const get = async (uri) => (await client.dataverseGet(uri)).body;
+  const bindings = await resolveActualManagementBindings(get);
+  const state = await readState(client, {
+    opportunityEntitySetName: bindings.opportunity.entitySetName,
+    actualManagementEntitySetName: bindings.actualManagement.entitySetName,
+  });
   const checks = validateState(state);
   if (!checks.entityValid || checks.opportunityCount !== 100 || checks.missingFields.length || checks.notWritable.length || !checks.relationshipValid || !checks.currencyResolved) throw new Error(`Preflight blocked: ${JSON.stringify(checks)}`);
   const opportunities = [...state.opportunities].sort((a, b) => a.opportunityid.localeCompare(b.opportunityid));
-  const plans = opportunities.map((opportunity, index) => buildSyntheticActual(opportunity, index));
+  const plans = opportunities.map((opportunity, index) => buildSyntheticActual(opportunity, index, bindings));
   if (!plans.every((plan) => plan.validation.valid)) throw new Error("Synthetic financial invariant failed");
   const reconciliation = reconcileSyntheticActuals(plans, state.actuals);
   if (reconciliation.conflicts.length) throw new Error(`Existing record conflict: ${JSON.stringify(reconciliation.conflicts)}`);
@@ -66,9 +72,18 @@ export async function main() {
     generatedAt: new Date().toISOString(),
     safety: { aiProvider: "demo", allowExternalAi: false, opportunityScope: "[AI-DEMO] only", opportunityMutation: false, externalAiDataSent: false },
     currentState: checks,
+    metadataBindings: {
+      opportunityEntitySetName: bindings.opportunity.entitySetName,
+      actualManagementEntitySetName: bindings.actualManagement.entitySetName,
+      opportunityLookupAttribute: bindings.actualManagement.opportunityLookup.lookupAttributeLogicalName,
+      opportunityNavigationProperty: bindings.actualManagement.opportunityLookup.navigationPropertyName,
+      opportunityBindKey: `${bindings.actualManagement.opportunityLookup.navigationPropertyName}@odata.bind`,
+      transactionCurrencyNavigationProperty: bindings.actualManagement.transactionCurrencyLookup.navigationPropertyName,
+      transactionCurrencyBindKey: `${bindings.actualManagement.transactionCurrencyLookup.navigationPropertyName}@odata.bind`,
+    },
     reconciliation: { alreadyExistsAndValidCount: reconciliation.alreadyExistsAndValid.length, missingCount: reconciliation.missing.length, conflictCount: 0 },
     currency: { strategy: "Each Actual Management record inherits its related Opportunity transactioncurrencyid", distribution: Object.entries(opportunities.reduce((acc, row) => { acc[row.transactioncurrencyid] = (acc[row.transactioncurrencyid] || 0) + 1; return acc; }, {})).map(([transactionCurrencyId, count]) => ({ transactionCurrencyId, count })), baseFieldsWritten: false, mismatchPolicy: "conflict" },
-    requests: plans.map((plan) => ({ semanticKey: plan.semanticKey, opportunityId: plan.opportunityId, syntheticName: plan.syntheticName, method: "POST", endpoint: "/api/data/v9.2/aigw_actualmanagements", payload: plan.payload, validation: plan.validation })),
+    requests: plans.map((plan) => ({ semanticKey: plan.semanticKey, opportunityId: plan.opportunityId, syntheticName: plan.syntheticName, method: "POST", endpoint: `/api/data/v9.2/${bindings.actualManagement.entitySetName}`, payload: plan.payload, validation: plan.validation })),
     rollback: { mode: "delete-created-record-ids-only", automatic: false, requiresSeparateAuthorization: true, warning: "Delete only IDs recorded by this execution. Never delete by broad name filter." },
     blocked: true,
     blockedReasons: ["Synchronous Actual Totals plugin is not deployed and verified", "One-Actual-record-per-Opportunity plugin guard is not deployed and verified"],
@@ -102,12 +117,12 @@ export async function main() {
     const plan = reconciliation.missing[index];
     let response;
     let postError;
-    try { response = await client.dataversePost("/api/data/v9.2/aigw_actualmanagements", plan.payload); } catch (error) { postError = error; }
+    try { response = await client.dataversePost(`/api/data/v9.2/${bindings.actualManagement.entitySetName}`, plan.payload); } catch (error) { postError = error; }
     let found;
     for (let attempt = 0; attempt < 8 && !found; attempt += 1) {
       if (attempt) await sleep(1500);
       const name = escapeOData(plan.syntheticName);
-      const rows = (await client.dataverseGet(`/api/data/v9.2/aigw_actualmanagements?$select=aigw_actualmanagementid,aigw_name,_aigw_opportunityid_value,_transactioncurrencyid_value,aigw_expectedorderdate,${MONEY_FIELDS.join(",")}&$filter=_aigw_opportunityid_value eq ${plan.opportunityId} and aigw_name eq '${name}'`)).body.value || [];
+      const rows = (await client.dataverseGet(`/api/data/v9.2/${bindings.actualManagement.entitySetName}?$select=aigw_actualmanagementid,aigw_name,_aigw_opportunityid_value,_transactioncurrencyid_value,aigw_expectedorderdate,${MONEY_FIELDS.join(",")}&$filter=_aigw_opportunityid_value eq ${plan.opportunityId} and aigw_name eq '${name}'`)).body.value || [];
       if (rows.length === 1 && reconcileSyntheticActuals([plan], rows).alreadyExistsAndValid.length === 1) found = rows[0];
       else if (rows.length > 0) throw new Error(`Created row mismatch for ${plan.syntheticName}`);
     }

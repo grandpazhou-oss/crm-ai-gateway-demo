@@ -1,20 +1,28 @@
+import { buildLookupBind } from "./dataverse-metadata-resolvers.mjs";
+
 export const MONTHS = ["april", "may", "june", "july", "august", "september", "october", "november", "december", "january", "february", "march"];
 export const MONEY_FIELDS = ["aigw_annualactualrevenue", ...MONTHS.flatMap((month) => [`aigw_${month}actualrevenue`, `aigw_${month}actualgp`, `aigw_${month}actualmp`])];
 export const TARGET_FIELDS = ["aigw_name", "aigw_expectedorderdate", ...MONEY_FIELDS];
 const factors = [0.82, 0.91, 1.03, 0.95, 1.08, 1.14, 0.89, 1.01, 1.12, 0.94, 1.06, 1.15];
 const round = (value) => Math.round(value * 100) / 100;
 
-export function buildSyntheticActual(opportunity, index) {
+export function buildSyntheticActual(opportunity, index, bindings) {
+  if (!bindings?.actualManagement?.opportunityLookup || !bindings.actualManagement.transactionCurrencyLookup) {
+    throw new Error("Synthetic Actual payload requires metadata-resolved lookup bindings.");
+  }
   const sequence = index + 1;
   const base = 86000 + (index % 10) * 7500 + Math.floor(index / 10) * 2300;
   const gpRatio = 0.22 + (index % 5) * 0.012;
   const mpRatio = 0.11 + (index % 4) * 0.009;
   const payload = {
     aigw_name: `[AI-DEMO-ACTUAL] ${String(sequence).padStart(3, "0")}`,
-    "aigw_opportunityid@odata.bind": `/opportunities(${opportunity.opportunityid})`,
-    "transactioncurrencyid@odata.bind": `/transactioncurrencies(${opportunity.transactioncurrencyid})`,
     aigw_expectedorderdate: `2026-${String(4 + (index % 9)).padStart(2, "0")}-${String(5 + (index % 20)).padStart(2, "0")}`,
   };
+  Object.assign(
+    payload,
+    buildLookupBind(bindings.actualManagement.opportunityLookup, opportunity.opportunityid),
+    buildLookupBind(bindings.actualManagement.transactionCurrencyLookup, opportunity.transactioncurrencyid),
+  );
   let annualRevenue = 0;
   const monthlyChecks = [];
   MONTHS.forEach((month, monthIndex) => {
