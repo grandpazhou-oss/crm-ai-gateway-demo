@@ -131,14 +131,13 @@ export async function main() {
     if (bindings.opportunity.entitySetName !== opportunitySet) throw new Error("Opportunity EntitySetName safety assertion failed.");
     if (bindings.actualManagement.entitySetName !== actualSet) throw new Error("Actual Management EntitySetName safety assertion failed.");
     if (bindings.transactionCurrency.entitySetName !== currencySet) throw new Error("Transaction currency EntitySetName safety assertion failed.");
-    const [cnyRows, jpyRows, orgRows, markerOpps, markerActuals, assemblyRows, imageRows] = await Promise.all([
+    const [cnyRows, jpyRows, orgRows, markerOpps, markerActuals, assemblyRows] = await Promise.all([
       get(`/api/data/v9.2/${currencySet}?$select=transactioncurrencyid,isocurrencycode,statecode&$filter=isocurrencycode eq 'CNY'`),
       get(`/api/data/v9.2/${currencySet}?$select=transactioncurrencyid,isocurrencycode,statecode,currencyprecision,exchangerate&$filter=isocurrencycode eq 'JPY'`),
       get("/api/data/v9.2/organizations?$select=_basecurrencyid_value"),
       get(`/api/data/v9.2/${opportunitySet}?$select=opportunityid,name&$filter=startswith(name,'${MARKER}')`),
       get(`/api/data/v9.2/${actualSet}?$select=aigw_actualmanagementid,aigw_name&$filter=startswith(aigw_name,'${MARKER}')`),
       get("/api/data/v9.2/pluginassemblies?$select=pluginassemblyid,name,publickeytoken&$filter=name eq 'CrmAiGateway.ActualTotals.Plugin'"),
-      get("/api/data/v9.2/sdkmessageprocessingstepimages?$select=sdkmessageprocessingstepimageid&$top=5000"),
     ]);
     const cny = cnyRows.value || [];
     const jpy = jpyRows.value || [];
@@ -151,6 +150,8 @@ export async function main() {
     const stepRows = [];
     for (const type of typeIds) stepRows.push(...((await get(`/api/data/v9.2/sdkmessageprocessingsteps?$select=sdkmessageprocessingstepid,name,statecode,stage,mode,rank,_plugintypeid_value&$filter=_plugintypeid_value eq ${type.plugintypeid}`)).value || []));
     const before = await Promise.all(ALL_STEPS.map((id) => step(id)));
+    const targetImageFilter = ALL_STEPS.map((id) => `_sdkmessageprocessingstepid_value eq ${id}`).join(" or ");
+    const imageRows = await get(`/api/data/v9.2/sdkmessageprocessingstepimages?$select=sdkmessageprocessingstepimageid,_sdkmessageprocessingstepid_value&$filter=${targetImageFilter}`);
     audit.steps.before = before;
     audit.metadata.componentCounts = { assembly: assemblies.length, pluginTypes: typeIds.length, steps: stepRows.length, images: (imageRows.value || []).length };
     const preflightReady = audit.metadata.currencies.cnyBaseMatches && audit.metadata.currencies.jpyActive && audit.metadata.currencies.jpyPrecision === 0 && Number(audit.metadata.currencies.jpyExchangeRate) === 20 && assemblies.length === 1 && typeIds.length === 3 && stepRows.length === 7 && (imageRows.value || []).length === 6 && before.every((item) => item.statecode === 1) && (markerOpps.value || []).length === 0 && (markerActuals.value || []).length === 0;
