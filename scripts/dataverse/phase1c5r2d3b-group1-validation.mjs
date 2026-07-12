@@ -61,6 +61,7 @@ function assertBusinessPayload(payload, bindings, { requireOpportunity = true } 
 
 export async function main() {
   assertDataverseScriptGate({ mode: "write-capable" });
+  if (!process.argv.includes(AUTH)) throw new Error("Phase-specific Group 1 authorization phrase is required.");
   const URL = getDataverseUrl();
   if (new globalThis.URL(URL).hostname !== EXPECTED_HOSTNAME) throw new Error("Only the designated test Dataverse environment is allowed.");
   if (String(process.env.AI_PROVIDER || "demo") !== "demo" || String(process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("AI safety gate failed.");
