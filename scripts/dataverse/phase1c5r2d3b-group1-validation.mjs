@@ -3,6 +3,7 @@ import path from "node:path";
 import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
 import { assertDataverseScriptGate, getDataverseUrl, runDataverseCli } from "./lib/environment-safety.mjs";
 import { buildLookupBind, resolveActualManagementBindings } from "./lib/dataverse-metadata-resolvers.mjs";
+import { resolveLiteralMarkerRecords } from "./lib/literal-marker-resolver.mjs";
 
 const EXPECTED_HOSTNAME = "org91f5f65f.crm5.dynamics.com";
 const AUTH = "CONFIRM_D365_TEST_WRITE_PHASE_1C_5R2D_3B_GROUP1";
@@ -23,7 +24,6 @@ const ALL_STEPS = Object.values(STEP_IDS);
 const stamp = () => new Date().toISOString();
 const escapeOData = (value) => String(value).replaceAll("'", "''");
 const isGuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
-const isExactMarker = (value) => String(value || "").startsWith(MARKER);
 
 function responseId(response, entityLogicalName) {
   const direct = response.body?.[`${entityLogicalName}id`];
@@ -142,8 +142,10 @@ export async function main() {
     ]);
     const cny = cnyRows.value || [];
     const jpy = jpyRows.value || [];
-    const markerOpps = { ...markerOppsRaw, value: (markerOppsRaw.value || []).filter((row) => isExactMarker(row.name)) };
-    const markerActuals = { ...markerActualsRaw, value: (markerActualsRaw.value || []).filter((row) => isExactMarker(row.aigw_name)) };
+    const markerOppScan = resolveLiteralMarkerRecords(markerOppsRaw.value || [], MARKER);
+    const markerActualScan = resolveLiteralMarkerRecords((markerActualsRaw.value || []).map((row) => ({ ...row, name: row.aigw_name })), MARKER);
+    const markerOpps = { ...markerOppsRaw, value: markerOppScan.literalRecords };
+    const markerActuals = { ...markerActualsRaw, value: markerActualScan.literalRecords };
     const cnyId = cny[0]?.transactioncurrencyid;
     const jpyId = jpy[0]?.transactioncurrencyid;
     audit.metadata.currencies = { cnyCount: cny.length, jpyCount: jpy.length, cnyBaseMatches: orgRows.value?.[0]?._basecurrencyid_value === cnyId, jpyActive: jpy.length === 1 && jpy[0].statecode === 0, jpyPrecision: jpy[0]?.currencyprecision ?? null, jpyExchangeRate: jpy[0]?.exchangerate ?? null };
@@ -159,6 +161,8 @@ export async function main() {
     audit.metadata.componentCounts = { assembly: assemblies.length, pluginTypes: typeIds.length, steps: stepRows.length, images: (imageRows.value || []).length };
     audit.metadata.markerServerCandidateCounts = { opportunities: markerOppsRaw.value?.length || 0, actuals: markerActualsRaw.value?.length || 0 };
     audit.metadata.markerExactCounts = { opportunities: markerOpps.value.length, actuals: markerActuals.value.length };
+    audit.metadata.markerRejectedCandidateCounts = { opportunities: markerOppScan.rejectedCandidateCount, actuals: markerActualScan.rejectedCandidateCount };
+    audit.metadata.markerGatePassed = markerOppScan.literalMatchCount === 0 && markerActualScan.literalMatchCount === 0;
     const preflightReady = audit.metadata.currencies.cnyBaseMatches && audit.metadata.currencies.jpyActive && audit.metadata.currencies.jpyPrecision === 0 && Number(audit.metadata.currencies.jpyExchangeRate) === 20 && assemblies.length === 1 && typeIds.length === 3 && stepRows.length === 7 && (imageRows.value || []).length === 6 && before.every((item) => item.statecode === 1) && markerOpps.value.length === 0 && markerActuals.value.length === 0;
     if (!preflightReady) throw new Error(`Preflight blocked: ${JSON.stringify({ currencies: audit.metadata.currencies, componentCounts: audit.metadata.componentCounts, allStepsDisabled: before.every((item) => item.statecode === 1), markerServerCandidates: audit.metadata.markerServerCandidateCounts, markerExact: audit.metadata.markerExactCounts })}`);
     group1Attempted = true;
@@ -242,8 +246,10 @@ export async function main() {
     }
     const remainingOppsRaw = await get(`/api/data/v9.2/${bindings.opportunity.entitySetName}?$select=opportunityid,name&$filter=startswith(name,'${MARKER}')`);
     const remainingActualsRaw = await get(`/api/data/v9.2/${bindings.actualManagement.entitySetName}?$select=aigw_actualmanagementid,aigw_name&$filter=startswith(aigw_name,'${MARKER}')`);
-    const remainingOpps = { ...remainingOppsRaw, value: (remainingOppsRaw.value || []).filter((row) => isExactMarker(row.name)) };
-    const remainingActuals = { ...remainingActualsRaw, value: (remainingActualsRaw.value || []).filter((row) => isExactMarker(row.aigw_name)) };
+    const remainingOppScan = resolveLiteralMarkerRecords(remainingOppsRaw.value || [], MARKER);
+    const remainingActualScan = resolveLiteralMarkerRecords((remainingActualsRaw.value || []).map((row) => ({ ...row, name: row.aigw_name })), MARKER);
+    const remainingOpps = { ...remainingOppsRaw, value: remainingOppScan.literalRecords };
+    const remainingActuals = { ...remainingActualsRaw, value: remainingActualScan.literalRecords };
     if ((remainingOpps.value || []).length || (remainingActuals.value || []).length || audit.cleanup.errors.length) throw new Error("Synthetic cleanup did not reach zero.");
     audit.steps.after = await Promise.all(ALL_STEPS.map((id) => step(id)));
     if (audit.steps.after.filter((item) => item.statecode === 0).length !== 2 || audit.steps.after.filter((item) => item.statecode === 1).length !== 5) throw new Error("Final Group 1 step state mismatch.");
