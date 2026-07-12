@@ -280,8 +280,8 @@ export async function main() {
       return id;
     };
     const readParent = (id) => get(`/api/data/v9.2/${bindings.opportunity.entitySetName}(${id})?$select=opportunityid,transactioncurrencyid,aigw_yearrevenueactual,aigw_yearrevenueactual_base,aigw_yearrevenueactualcny,modifiedon,versionnumber`);
-    const readChild = (id) => get(`/api/data/v9.2/${bindings.actualManagement.entitySetName}(${id})?$select=aigw_actualmanagementid,aigw_opportunityid,aigw_annualactualrevenue,${MONTH_REVENUE_FIELDS.join(",")}`);
-    const readChildren = (opportunityId) => get(`/api/data/v9.2/${bindings.actualManagement.entitySetName}?$select=aigw_actualmanagementid,aigw_opportunityid,aigw_annualactualrevenue&$filter=_aigw_opportunityid_value eq ${opportunityId}`);
+    const readChild = (id) => get(`/api/data/v9.2/${bindings.actualManagement.entitySetName}(${id})?$select=aigw_actualmanagementid,_aigw_opportunityid_value,aigw_annualactualrevenue,${MONTH_REVENUE_FIELDS.join(",")}`);
+    const readChildren = (opportunityId) => get(`/api/data/v9.2/${bindings.actualManagement.entitySetName}?$select=aigw_actualmanagementid,_aigw_opportunityid_value,aigw_annualactualrevenue&$filter=_aigw_opportunityid_value eq ${opportunityId}`);
     const runTest = async (name, action) => {
       try {
         audit.tests.push({ name, ...(await action()) });

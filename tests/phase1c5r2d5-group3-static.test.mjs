@@ -24,3 +24,9 @@ test("Group 3 audit covers the explicit CNY, base, reparent, no-op and deferred 
   const source = await readFile(runnerPath, "utf8");
   for (const marker of ["aigw_yearrevenueactual_base", "aigw_yearrevenueactualcny", "oldOpportunityIdFromPreImage", "noOpParentUpdate", "Not Executable Without Bypassing Validation", "Not Executable Without Violating Group 1 Invariant"]) assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
+
+test("Group 3 reads the Opportunity lookup through its OData value property", async () => {
+  const source = await readFile(runnerPath, "utf8");
+  assert.match(source, /_aigw_opportunityid_value/);
+  assert.doesNotMatch(source, /\$select=aigw_actualmanagementid,aigw_opportunityid,/);
+});
