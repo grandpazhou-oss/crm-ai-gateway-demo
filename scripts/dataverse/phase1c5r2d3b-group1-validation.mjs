@@ -6,9 +6,9 @@ import { buildLookupBind, resolveActualManagementBindings } from "./lib/datavers
 import { resolveLiteralMarkerRecords } from "./lib/literal-marker-resolver.mjs";
 
 const EXPECTED_HOSTNAME = "org91f5f65f.crm5.dynamics.com";
-const AUTH = "CONFIRM_D365_TEST_WRITE_PHASE_1C_5R2D_3B_GROUP1";
+const AUTH = "CONFIRM_D365_TEST_WRITE_PHASE_1C_5R2D_3D_GROUP1";
 const MARKER = "[AI-DEMO-R2D3]";
-const AUDIT_PATH = "local-artifacts/d365/plugin-registration/phase1c5r2d3b-group1-validation-lookup-fixed.json";
+const AUDIT_PATH = "local-artifacts/d365/plugin-registration/phase1c5r2d3d-group1-validation-literal-marker.json";
 const STEP_IDS = {
   preValidationCreate: "28a481a1-807d-f111-ab0e-6045bd5b2c06",
   preValidationUpdate: "3c48aba8-807d-f111-ab0e-6045bd5b2c06",
@@ -68,7 +68,7 @@ export async function main() {
   if (String(process.env.AI_PROVIDER || "demo") !== "demo" || String(process.env.ALLOW_EXTERNAL_AI || "false").toLowerCase() !== "false") throw new Error("AI safety gate failed.");
   const root = process.cwd();
   const audit = {
-    phase: "1C-5R2D-3B",
+    phase: "1C-5R2D-3D",
     startedAt: stamp(),
     environment: { hostname: new globalThis.URL(URL).hostname, organization: "org91f5f65f", productionRequests: 0 },
     metadata: {},
