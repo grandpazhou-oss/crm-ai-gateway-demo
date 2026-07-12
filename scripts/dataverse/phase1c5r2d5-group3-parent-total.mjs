@@ -336,6 +336,7 @@ export async function main() {
       const before = await readParent(parentA);
       await remove(`/api/data/v9.2/${bindings.actualManagement.entitySetName}(${childA})`);
       deletedActualIds.add(childA);
+      audit.cleanup.deletedActualIds.push(childA);
       const after = await readParent(parentA);
       let missing = false;
       try { await readChild(childA); } catch (error) { missing = error?.status === 404; }
