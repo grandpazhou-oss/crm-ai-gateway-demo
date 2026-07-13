@@ -2,6 +2,21 @@
 
 This runbook is future execution guidance. It does not create data and does not enable any Step.
 
+## Current Contract
+
+The deployed first-version contract is Revenue-only and allows at most one Actual
+Management record per Opportunity. The smoke test uses the 12 monthly Revenue
+fields, `aigw_annualactualrevenue`, and `opportunity.aigw_yearrevenueactual`.
+Monthly GP/MP fields may be entered only when the form requires them, but this
+runbook does not assert annual GP/MP totals. It does not require or use
+`aigw_fiscalyear`, `aigw_annualactualgp`, or `aigw_annualactualmp`, and it does
+not test multi-fiscal-year uniqueness.
+
+The read-only contract gate is implemented by
+`scripts/dataverse/lib/phase1c5-plugin-browser-smoke-contract.mjs`. It performs
+no Dataverse access and does not replace the separately authorized browser UI
+execution.
+
 For every case, record the synthetic record key, timestamps, child annual value, parent annual value, error text if rejected, and before/after screenshots or metadata evidence. Stop on the first unexpected result.
 
 | Test | Preconditions and action | Expected result |
