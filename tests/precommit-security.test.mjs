@@ -20,7 +20,7 @@ const writeScripts = new Set([
   "apply-phase1c2-opportunity-relationship.mjs", "apply-phase1c3-actual-management-view.mjs", "apply-phase1c3a-add-view-to-solution.mjs",
   "apply-phase1c3c-retry-add-view-to-solution.mjs", "create-phase1b-full-form.mjs", "create-phase1b-full-view.mjs",
   "patch-phase1b-m2a-demo-fields.mjs", "apply-phase1c5r2d1-registration.mjs", "phase1c5-synthetic-actuals.mjs", "phase1c5r2d3b-group1-validation.mjs", "phase1c5r2d4-group2-child-total.mjs", "phase1c5r2d5-group3-parent-total.mjs", "repair-phase1b-form-base-chinese-labels.mjs",
-  "repair-phase1b-form-visual-labels.mjs",
+  "repair-phase1b-form-visual-labels.mjs", "phase1c5r2e2d4b-polpod-lookup.mjs",
 ]);
 
 test("Dataverse script inventory covers every executable script and write scripts use the shared gate", async () => {
@@ -30,10 +30,10 @@ test("Dataverse script inventory covers every executable script and write script
     assert.equal(inventory.includes(`\`${file}\``), true, `${file} missing from safety inventory`);
     const source = await readFile(new URL(file, dataverseScripts), "utf8");
     assert.doesNotMatch(source, /https:\/\/(?!example)[a-z0-9-]+\.crm\d*\.dynamics\.com/i);
-    if (writeScripts.has(file)) assert.match(source, /assertDataverseScriptGate\(\{ mode: "write-capable" \}\)/);
-    if (file === "phase1a-full.mjs") assert.match(source, /assertDataverseScriptGate\(\{ mode: "publish\/deploy-capable" \}\)/);
+    if (writeScripts.has(file) && file !== "phase1c5r2e2d4b-polpod-lookup.mjs") assert.match(source, /assertDataverseScriptGate\(\{ mode: "write-capable" \}\)/);
+    if (file === "phase1a-full.mjs" || file === "phase1c5r2e2d4b-polpod-lookup.mjs") assert.match(source, /assertDataverseScriptGate\(\{ mode: "publish\/deploy-capable" \}\)/);
   }
-  assert.equal(files.length, 37);
+  assert.equal(files.length, 38);
 });
 
 test("curated Opportunity schema contains unique project fields without environment export properties", async () => {
