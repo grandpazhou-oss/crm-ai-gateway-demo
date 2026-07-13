@@ -129,6 +129,17 @@ Attribute-level Metadata does not expose an independent state/status property. T
 | 78 | `aigw_septemberactualrevenue` | `aigw_SeptemberActualRevenue` | September Actual Revenue | 9月实绩收入 | MoneyType | None | true | true | true | 0 (Simple) | false | false | false | false | unmanaged |
 | 79 | `aigw_septemberactualrevenue_base` | `aigw_septemberactualrevenue_Base` | September Actual Revenue (Base) | 9月实绩收入(基础货币) | MoneyType | None | false | false | true | 0 (Simple) | false | false | false | false | unmanaged |
 
+### Opportunity Target Amount Fields
+
+| Logical name | Schema name | Type | 1033 | 2052 | Required | Create | Update | Read | SourceType | Secured | Managed | CalculationOf |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `aigw_yearrevenueactual` | `Aigw_Yearrevenueactual` | MoneyType | 年度收入实绩总金额 | 年度收入实绩总金额 | None | true | true | true | 0 (Simple) | false | false |  |
+| `aigw_yearrevenueactual_base` | `aigw_yearrevenueactual_Base` | MoneyType | 年度收入实绩总金额 (Base) | 年度收入实绩总金额(基础货币) | None | false | false | true | 0 (Simple) | false | false | aigw_yearrevenueactual |
+| `aigw_yearrevenueactualcny` | `Aigw_Yearrevenueactualcny` | MoneyType | 年度收入实绩总金额(CNY) | 年度收入实绩总金额(CNY) | None | true | true | true | 0 (Simple) | false | false |  |
+| `transactioncurrencyid` | `TransactionCurrencyId` | LookupType | Currency | 货币 | ApplicationRequired | true | true | true | unknown | false | true |  |
+
+The current parent contract is `opportunity.aigw_yearrevenueactual`. Its generated base companion `aigw_yearrevenueactual_base` exists, is read-only for create/update, and reports `CalculationOf=aigw_yearrevenueactual`. The independent deprecated field `aigw_yearrevenueactualcny` exists but is not written by the Plugin.
+
 ## Actual Management Main Form
 
 | Property | Published | Unpublished/current |
@@ -145,8 +156,6 @@ Attribute-level Metadata does not expose an independent state/status property. T
 | Annual MP controls | 0 | same |
 | Opportunity lookup controls | 1 | same |
 | Currency controls | 1 | same |
-
-FormXML published/unpublished hashes differ while FormJSON hashes are equal; this is recorded as an existing draft/published-definition difference and was not modified by this audit. The structure and all 41 bindings remain readable.
 
 ### All 41 Controls
 
