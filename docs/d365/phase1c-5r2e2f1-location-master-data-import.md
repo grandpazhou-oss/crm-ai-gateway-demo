@@ -1,4 +1,4 @@
-# Phase 1C-5R2E-2F1 Test Location Master Data Import
+# Phase 1C-5R2E-2F1R Location Master Data Import
 
 ## Decision
 
@@ -6,97 +6,95 @@
 
 `Location Residual Mismatch Count=not-applicable`
 
-The import stopped at the first local CSV gate. No Dataverse client was created,
-no Metadata query was sent, and no Location record was created.
+The name-only CSV passed every offline gate, but the Dataverse dry-run stopped at
+the metadata gate. The approved test environment does not contain the required
+`new_location` table, and Opportunity's current `案件场所` field is a String rather
+than a Lookup. Apply was not executed and no Location records were created.
 
-## Input File
+## Input Files
 
-- External source file: `new_locations_active_2026-07-14.csv`
-- The absolute workstation path is retained only in local execution context and
-  is not committed to the repository.
-- File readable: yes
-- Encoding: UTF-8 CSV with BOM
+- Source: `new_locations_active_2026-07-14.csv` (external local file, unchanged)
+- Generated input: `new_locations_name_only_2026-07-14.csv` (external local file)
+- Neither CSV is stored in Git.
+- Source SHA-256 before and after extraction:
+  `1048e3ee2543f659ee2674014f0e27254d652ad3f543507ae0cac6cce4d58c70`
+- Generated CSV SHA-256:
+  `1d516e8eff694a84648f3bf47b0460c00322c779b3e17d97f9594afea0e233e5`
 
-## CSV Validation
+## Name-Only CSV Validation
 
 | Check | Result |
-| --- | --- |
-| Physical rows including header | 52 |
-| Data rows | 51 |
-| Required header | `Name` |
-| Actual header columns | `LocationId`, `Name`, `StateCode`, `State`, `CreatedOn` |
-| Extra columns | 4 |
-| Valid trimmed names identifiable for diagnostics | 51 |
+| --- | ---: |
+| Header | `Name` |
+| Columns | 1 |
+| Records | 51 |
 | Blank rows | 0 |
 | Empty names | 0 |
 | Exact duplicates | 0 |
 | Trimmed case-insensitive duplicates | 0 |
-| CSV gate | Blocked |
+| Offline gate | Passed |
 
-The source contains record IDs, state values, localized state labels, and created
-timestamps. Those values were not imported, transformed, or used in a payload.
-The names were read only to calculate validation counts; no name was changed.
+The extraction preserved source order and only trimmed leading or trailing
+whitespace. It did not normalize punctuation, internal spaces, case, or numbering.
 
-## Metadata And Lookup Gate
+First five names:
 
-Not executed because the CSV gate failed first. The following required facts
-therefore remain unverified in this phase:
+1. `01: Beijing`
+2. `02: Shanghai`
+3. `03: Tianjin`
+4. `04: Chongqing`
+5. `05: Guangzhou`
 
-- `new_location` table and `new_locations` Entity Set;
-- primary ID `new_locationid` and primary name `new_name`;
-- create/read validity and required-field surface;
-- Opportunity `案件场所` Lookup logical name and `new_location` target.
+Last five names:
 
-No schema was guessed or created.
+1. `47. National`
+2. `48. Nationwide`
+3. `49. undecided`
+4. `50: Nantong`
+5. `91: Others`
 
-## Dry Run And Apply
+## Dataverse Dry Run
 
-The reusable importer is:
+Connected host: approved test organization only.
 
-`scripts/dataverse/import-location-master-data.mjs`
+The required contract could not be confirmed:
 
-It defaults to dry-run, requires `--source`, validates the CSV before creating a
-Dataverse client, and accepts only the approved test organization hostname.
-Apply mode additionally requires the repository-wide test/write confirmations.
+| Contract | Read-back result |
+| --- | --- |
+| Table `new_location` | Missing |
+| Entity set `new_locations` | Not applicable because the table is missing |
+| Primary ID `new_locationid` | Not applicable |
+| Primary name `new_name` | Not applicable |
+| Opportunity case-location field | `aigw_opportunityplace` |
+| Current attribute type | `String` |
+| Required target | Lookup to `new_location` |
+| Lookup target gate | Failed |
 
-Current dry-run result:
+A read-only metadata candidate scan found no environment table matching the
+required `new_location` contract. The existing `aigw_polpodlocation` table is a
+separate POL/POD master and was not substituted or modified.
 
-- CSV valid names: 51 diagnostic values, but the file contract is invalid
-- Existing Active: not queried
-- Missing: not queried
-- Inactive conflicts: not queried
-- Dataverse duplicates: not queried
-- To create: 0
-- Skipped existing: 0
+Because metadata validation failed before record classification, Existing Active,
+Inactive conflicts, ambiguous duplicates, missing names, and residual mismatches
+cannot be calculated safely.
 
-Apply was not entered. No partial import occurred.
-
-## Import Result
+## Apply Result
 
 | Metric | Result |
 | --- | ---: |
-| Import-before record count | Not queried |
 | Existing Active | Not queried |
 | Created | 0 |
 | Skipped | 0 |
-| Inactive conflict | Not queried |
-| Ambiguous duplicate | Not queried |
-| Failed create | 0 |
-| New Location names and test GUIDs | None |
+| Failed creates | 0 |
+| New test-environment GUIDs | None |
+| Business writes | 0 |
 
-## Post-Import Verification
-
-Not applicable because no import occurred. The importer will perform a full
-active/inactive readback, normalized duplicate check, and residual mismatch
-calculation only after a valid one-column CSV passes the preflight.
-
-Opportunity, Form, View, App, BPF, Plugin, Solution, Schema, and all business
-records were unchanged.
+Apply was not invoked. No partial import or rollback was needed.
 
 ## Request Accounting
 
 ```text
-GET=0
+GET=4
 POST=0
 PATCH=0
 DELETE=0
@@ -105,18 +103,28 @@ Business writes=0
 Production requests=0
 ```
 
-## Required Correction
+The GET count includes the failed contract lookup and read-only candidate
+forensics. No request targeted the prohibited production hostname.
 
-Provide a new external CSV containing exactly one header, `Name`, and only the
-51 intended Location names below it. Do not edit this five-column source in
-place if it is needed as rollback evidence. After replacement, rerun dry-run;
-Metadata, Lookup mapping, Active/Inactive classification, and the full to-create
-list must pass before a separately explicit apply invocation.
+## Required Next Decision
 
-These options cannot yet be used by the subsequent Demo Data phase because the
-Location import did not run.
+The import cannot resume under the current schema. A separately authorized
+schema-design phase would need to create or identify the intended Location table
+and replace or supplement `aigw_opportunityplace` with a Lookup targeting that
+table. This phase did not make either change.
 
-## Verification
+The 51 options must not be used by R2E-5 Demo Data until the schema and Lookup
+contract are explicitly resolved and a new dry-run reports zero conflicts.
+
+## Protection Result
+
+- Opportunity, Actual Management, Form, View, App, BPF, Plugin, and Solution: not modified
+- Existing Location records: not modified, deleted, or reactivated
+- Schema and Publish actions: 0
+- Demo Opportunity creation: 0
+- BPF activation: 0
+
+## Local Verification
 
 - `npm test`: passed, 179/179
 - `npm run build`: passed
