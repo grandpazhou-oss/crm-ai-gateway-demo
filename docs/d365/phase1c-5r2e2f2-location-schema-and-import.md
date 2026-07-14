@@ -3,16 +3,17 @@
 ## Decision
 
 - `Server-side Ready=true`
-- `Runtime Validation Deferred=false`
+- `Runtime Validation Deferred=true`
 - `Location Schema Runtime Ready=true`
 - `Location Schema and Import Ready=false`
-- `Location Residual Mismatch Count=51`
+- `Location Residual Mismatch Count=0`
 
 The Location schema, Opportunity Lookup, View, Full Replica binding and targeted
 publication are complete. Manual runtime evidence confirms the published native
 Lookup opens in Full Replica without permission, target, component, or loading
-errors. Phase 2F2B dry-run passed, but Apply stopped before its first Location
-POST; no Location master records were imported.
+errors. The R2 resume imported and independently verified all 51 Location master
+records. Final browser verification is deferred because browser control could not
+initialize, so the combined phase remains gated.
 
 ## Environment And Baseline
 
@@ -101,7 +102,7 @@ external name-only CSV remains unchanged and outside Git.
 ## Protection And Issues
 
 - P0: 0
-- P1: 1 - Location master rows remain missing
+- P1: 1 - post-import browser Lookup evidence is pending
 - P2: 0
 - Protected Form: unchanged
 - Actual Management Form/View/Schema: unchanged
@@ -240,3 +241,111 @@ was sent and is not counted as a Dataverse GET or POST.
 The next authorized execution must start with a fresh dry run. It may safely
 reuse the idempotent importer after authentication network availability is
 confirmed; it must not modify or delete existing records.
+
+## Phase 2F2B-R2 Resume - 2026-07-14
+
+Authentication and all protection gates were revalidated before Apply. The new
+dry run returned CSV=51, Existing Active=0, Existing Inactive=0, Missing=51 and
+Ambiguous Duplicate=0. The importer then created all 51 missing rows sequentially
+with read-before-write and the name-only payload. No retry or network-failure
+reconciliation was needed.
+
+| Name | Test environment Location ID | HTTP |
+| --- | --- | ---: |
+| `01: Beijing` | `1f4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `02: Shanghai` | `204e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `03: Tianjin` | `214e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `04: Chongqing` | `224e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `05: Guangzhou` | `234e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `06: Shenzhen` | `244e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `07: Hangzhou` | `254e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `08: Nanjing` | `264e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `09: Wuhan` | `274e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `10: Chengdu` | `284e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `11: Xi'an` | `294e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `12: Qingdao` | `2a4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `13: Dalian` | `2b4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `14: Changchun` | `2c4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `15: Shenyang` | `2d4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `16: Harbin` | `2e4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `17: Fuzhou` | `2f4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `18: Xiamen` | `304e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `19: Kunming` | `314e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `20: Guiyang` | `324e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `21: Nanning` | `334e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `22: Haikou` | `344e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `23: Hefei` | `354e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `24: Taiyuan` | `364e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `25: Shijiazhuang` | `374e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `26: Zhengzhou` | `384e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `27: Changsha` | `394e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `28: Nanchang` | `3a4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `29: Suzhou` | `3b4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `30: Wuxi` | `3c4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `31: Changzhou` | `3d4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `32: Ningbo` | `3e4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `33: Wenzhou` | `3f4e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `34: Jiaxing` | `404e1d38-537f-f111-ab0e-70a8a5007736` | 201 |
+| `35: Huzhou` | `87e71c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `36: Jinhua` | `88e71c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `37: Taizhou` | `8ae71c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `38: Zhuhai` | `3ee81c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `39: Shantou` | `74e81c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `40: Yangzhou` | `02e91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `41: Hongkong` | `7ae91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `42: Taiwan` | `94e91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `43: LD Gr.Other country` | `95e91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `44: Japan` | `96e91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `45.Shandong/Beijing` | `97e91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `46.Taicang` | `98e91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `47. National` | `99e91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `48. Nationwide` | `9ae91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `49. undecided` | `9be91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `50: Nantong` | `9ce91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+| `91: Others` | `9de91c3e-537f-f111-ab0e-70a8a5007736` | 201 |
+
+### R2 Integrity Verification
+
+- Total / Active / Inactive: 51 / 51 / 0
+- Missing / normalized duplicate keys / empty names: 0 / 0 / 0
+- Idempotent post-import dry run: Existing Active=51, Missing=0
+- Exact results: each of Beijing, Shanghai, Tianjin,
+  `45.Shandong/Beijing`, `49. undecided` and `91: Others` returned once
+- Search `Shanghai`: `02: Shanghai`
+- Search `Beijing`: `01: Beijing`, `45.Shandong/Beijing`
+- Ascending order begins Beijing, Shanghai, Tianjin and ends undecided, Nantong,
+  Others
+- CSV-external records: 0
+- Opportunity business writes: 0
+
+### R2 Runtime And Final Gate
+
+Browser control failed during initialization before reaching CRM, so no browser
+request or write occurred. The imported data is server-side ready, but the user
+must expand `案件场所` in the Modern App and capture the populated Lookup plus the
+Shanghai and Beijing search results without selecting or saving a value.
+
+- `Server-side Import Ready=true`
+- `Runtime Validation Deferred=true`
+- `Location Schema and Import Ready=false`
+- `Location Residual Mismatch Count=0`
+- P0: 0
+- P1: 1 - populated Lookup browser evidence is pending
+- P2: 0
+- Demo Data use: blocked until the runtime evidence gate passes
+
+### R2 Request Accounting
+
+```text
+GET=103
+POST=51
+PATCH=0
+DELETE=0
+Publish=0
+Business writes=51 (aigw_location Create only)
+Production requests=0
+```
+
+The GET total covers preflight protection (15), initial dry run (4), Apply
+read-before-write and final readback (56), post-import idempotence dry run (4),
+post-import protection (15), and exact/search integrity queries (9).
