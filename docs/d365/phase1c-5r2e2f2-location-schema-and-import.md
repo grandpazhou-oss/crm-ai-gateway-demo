@@ -3,17 +3,18 @@
 ## Decision
 
 - `Server-side Ready=true`
-- `Runtime Validation Deferred=true`
+- `Runtime Validation Deferred=false`
 - `Location Schema Runtime Ready=true`
-- `Location Schema and Import Ready=false`
+- `Server-side Import Ready=true`
+- `Location Schema and Import Ready=true`
 - `Location Residual Mismatch Count=0`
 
 The Location schema, Opportunity Lookup, View, Full Replica binding and targeted
 publication are complete. Manual runtime evidence confirms the published native
 Lookup opens in Full Replica without permission, target, component, or loading
 errors. The R2 resume imported and independently verified all 51 Location master
-records. Final browser verification is deferred because browser control could not
-initialize, so the combined phase remains gated.
+records. The user then completed the populated Lookup and search checks in the
+published Modern App without selecting or saving a Location.
 
 ## Environment And Baseline
 
@@ -102,7 +103,7 @@ external name-only CSV remains unchanged and outside Git.
 ## Protection And Issues
 
 - P0: 0
-- P1: 1 - post-import browser Lookup evidence is pending
+- P1: 0
 - P2: 0
 - Protected Form: unchanged
 - Actual Management Form/View/Schema: unchanged
@@ -349,3 +350,63 @@ Production requests=0
 The GET total covers preflight protection (15), initial dry run (4), Apply
 read-before-write and final readback (56), post-import idempotence dry run (4),
 post-import protection (15), and exact/search integrity queries (9).
+
+## Phase 2F2B-R3 Manual Runtime Finalization - 2026-07-14
+
+The user manually validated the populated Lookup in the approved test
+environment and `CRM AI Gateway Demo - Modern`:
+
+- An existing `[AI-DEMO]` Opportunity opened in Full Replica.
+- `案件场所` rendered as the native `aigw_opportunitylocation` Lookup.
+- The Lookup expanded and displayed `01: Beijing`, `02: Shanghai`,
+  `03: Tianjin`, and `91: Others`.
+- Searching `Shanghai` returned `02: Shanghai`.
+- Searching `Beijing` returned `01: Beijing` and `45.Shandong/Beijing`.
+- There was no permission, invalid-target, component-load, blank, or infinite-load
+  error.
+- No Location was selected and the Opportunity was not modified or saved.
+
+### Screenshot Index
+
+No new R3 image file was attached to the repository workspace or placed in the
+ignored runtime-validation directory. The runtime result above is recorded from
+the user's explicit manual verification statement; no screenshot path is
+invented. Existing unrelated runtime screenshots remain ignored and unchanged.
+
+### R3 Independent Read-Back
+
+- Active / Inactive / empty Location rows: 51 / 0 / 0
+- Normalized duplicate keys: 0
+- CSV Missing / Inactive conflict / Ambiguous duplicate: 0 / 0 / 0
+- Location Residual Mismatch Count: 0
+- Lookup: `aigw_opportunitylocation`, type Lookup, target `aigw_location`
+- Full Replica: 5 / 19 / 115 / 106
+- New Lookup / old String controls: 1 / 0
+- Native / old Timeline controls: 1 / 0
+- Protected Form hashes: unchanged at baseline
+- Plugin: 7 enabled / 0 disabled
+- BPF: Draft / Inactive
+- Actual Management, POL/POD, Modern App and Opportunity data: unchanged
+
+```text
+GET=21
+POST=0
+PATCH=0
+DELETE=0
+Publish=0
+Business writes=0
+Production requests=0
+```
+
+### Final Gate
+
+- P0: 0
+- P1: 0
+- P2: 1 - no new R3 screenshot file was supplied; the explicit manual result is
+  accepted as runtime evidence
+- `Runtime Validation Deferred=false`
+- `Location Schema Runtime Ready=true`
+- `Server-side Import Ready=true`
+- `Location Schema and Import Ready=true`
+- `Location Residual Mismatch Count=0`
+- Later Demo Data may use `aigw_opportunitylocation` under its own authorization.
