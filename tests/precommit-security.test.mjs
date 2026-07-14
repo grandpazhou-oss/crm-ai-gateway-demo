@@ -20,7 +20,7 @@ const writeScripts = new Set([
   "apply-phase1c2-opportunity-relationship.mjs", "apply-phase1c3-actual-management-view.mjs", "apply-phase1c3a-add-view-to-solution.mjs",
   "apply-phase1c3c-retry-add-view-to-solution.mjs", "create-phase1b-full-form.mjs", "create-phase1b-full-view.mjs",
   "patch-phase1b-m2a-demo-fields.mjs", "apply-phase1c5r2d1-registration.mjs", "phase1c5-synthetic-actuals.mjs", "phase1c5r2d3b-group1-validation.mjs", "phase1c5r2d4-group2-child-total.mjs", "phase1c5r2d5-group3-parent-total.mjs", "repair-phase1b-form-base-chinese-labels.mjs",
-  "repair-phase1b-form-visual-labels.mjs", "phase1c5r2e2d4b-polpod-lookup.mjs", "phase1c5r2e2d4a-timeline-restore.mjs",
+  "repair-phase1b-form-visual-labels.mjs", "phase1c5r2e2d4b-polpod-lookup.mjs", "phase1c5r2e2d4a-timeline-restore.mjs", "import-location-master-data.mjs",
 ]);
 
 test("Dataverse script inventory covers every executable script and write scripts use the shared gate", async () => {
@@ -33,7 +33,7 @@ test("Dataverse script inventory covers every executable script and write script
     if (writeScripts.has(file) && file !== "phase1c5r2e2d4b-polpod-lookup.mjs" && file !== "phase1c5r2e2d4a-timeline-restore.mjs") assert.match(source, /assertDataverseScriptGate\(\{ mode: "write-capable" \}\)/);
     if (file === "phase1a-full.mjs" || file === "phase1c5r2e2d4b-polpod-lookup.mjs" || file === "phase1c5r2e2d4a-timeline-restore.mjs") assert.match(source, /assertDataverseScriptGate\(\{ mode: "publish\/deploy-capable" \}\)/);
   }
-  assert.equal(files.length, 39);
+  assert.equal(files.length, 40);
 });
 
 test("curated Opportunity schema contains unique project fields without environment export properties", async () => {
