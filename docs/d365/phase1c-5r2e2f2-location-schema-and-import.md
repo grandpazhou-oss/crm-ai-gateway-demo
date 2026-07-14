@@ -3,15 +3,16 @@
 ## Decision
 
 - `Server-side Ready=true`
-- `Runtime Validation Deferred=true`
-- `Location Schema Runtime Ready=false`
+- `Runtime Validation Deferred=false`
+- `Location Schema Runtime Ready=true`
 - `Location Schema and Import Ready=false`
 - `Location Residual Mismatch Count=not-applicable`
 
 The Location schema, Opportunity Lookup, View, Full Replica binding and targeted
-publication are complete. Phase 2F2B did not start because the required browser
-runtime Lookup check could not be completed by the available browser-control
-runtime. No Location master records were imported.
+publication are complete. Manual runtime evidence confirms the published native
+Lookup opens in Full Replica without permission, target, component, or loading
+errors. Phase 2F2B remains separately gated and has not started; no Location
+master records were imported.
 
 ## Environment And Baseline
 
@@ -70,19 +71,17 @@ The implementation Application User has System Administrator, System Customizer,
 Sales Manager and Salesperson roles. This is sufficient for schema implementation
 and the planned read/create verification. No business role was modified.
 
-The browser runtime failed during local browser-controller initialization before
-opening CRM. Therefore it did not prove that the published Lookup expands without
-an error. The hard 2F2A gate remains closed even though server-side metadata and
-published Form definitions are valid.
+Manual evidence captured on 2026-07-14 shows the approved test hostname, the
+published Modern App, and an existing `[AI-DEMO]` Opportunity routed to Full
+Replica. The `案件场所` field renders as a native Lookup and expands to the expected
+empty state before master-data import. No Location was selected and the
+Opportunity was not saved. There was no permission error, invalid Lookup target,
+component failure, or infinite loading state.
 
-Manual evidence required to resume:
-
-1. Open `CRM AI Gateway Demo - Modern` in the test environment.
-2. Open an existing `[AI-DEMO]` Opportunity and confirm Full Replica routing.
-3. Expand `案件场所` without selecting a value.
-4. Capture the visible Lookup search/dropdown and absence of permission, invalid
-   target, component, or loading errors.
-5. Do not save the Opportunity.
+The runtime result also confirms that the App can resolve the Location dependency
+without adding a Location navigation page. The validation user can read and open
+the Lookup; no role changes were required. The screenshot remains outside Git in
+the local runtime-evidence source supplied by the user.
 
 ## Phase 2F2B Import
 
@@ -101,7 +100,7 @@ Not executed. The external name-only CSV remains unchanged and outside Git.
 ## Protection And Issues
 
 - P0: 0
-- P1: 1 - browser runtime Lookup evidence is missing
+- P1: 0
 - P2: 0
 - Protected Form: unchanged
 - Actual Management Form/View/Schema: unchanged
@@ -129,5 +128,25 @@ POST comprises one table create (completed after client timeout), one relationsh
 create, one View create, and two targeted PublishXml calls. PATCH is the Full
 Replica FormXML binding replacement. No App publish was required or performed.
 
-Phase 2F2B remains blocked until real runtime evidence allows
-`Location Schema Runtime Ready=true`.
+The 2F2A gate is passed. Phase 2F2B Location dry-run and import may resume under a
+separate execution authorization; this verification performed no Location import.
+
+## Runtime Gate Read-Back
+
+The final read-only supplement used 15 Dataverse GET requests and no writes:
+
+```text
+GET=15
+POST=0
+PATCH=0
+DELETE=0
+Publish=0
+Business writes=0
+Production requests=0
+```
+
+It reconfirmed `aigw_opportunitylocation` as the single Full Replica Lookup,
+targeting `aigw_location` through `aigw_location_opportunities`; the old
+`aigw_opportunityplace` control count is zero. Full Replica remains 5/19/115/106
+with one native Timeline. Protected Form hashes remain at baseline, the BPF is
+Draft/Inactive, and the plugin protection gate remains 7 enabled / 0 disabled.
