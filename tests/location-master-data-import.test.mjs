@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 import {
   buildLocationPayload,
@@ -70,4 +71,10 @@ test("Opportunity location Lookup resolves only the new project lookup", () => {
     { LogicalName: "aigw_airpollookup", SchemaName: "aigw_AirPolLookup", DisplayName: { LocalizedLabels: [{ LanguageCode: 2052, Label: "空运装货港" }] }, Targets: ["aigw_polpodlocation"], IsValidForRead: true },
   ];
   assert.deepEqual(findOpportunityLocationLookups(attributes), [{ logicalName: "aigw_opportunitylocation", schemaName: "aigw_OpportunityLocation", displayNames: { "2052": "案件场所（Location）" }, targets: ["aigw_location"], isValidForRead: true }]);
+});
+
+test("Location create uses the Metadata-derived Entity Set", () => {
+  const source = fs.readFileSync(new URL("../scripts/dataverse/import-location-master-data.mjs", import.meta.url), "utf8");
+  assert.match(source, /\/api\/data\/v9\.2\/\$\{entitySetName\}/);
+  assert.doesNotMatch(source, /\$\{ENTITY_SET\}/);
 });

@@ -293,7 +293,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env } =
     }
     if (current.existingActive.length) continue;
     try {
-      const response = await request("POST", `/api/data/v9.2/${ENTITY_SET}`, buildLocationPayload(item.name));
+      const response = await request("POST", `/api/data/v9.2/${entitySetName}`, buildLocationPayload(item.name));
       const recordId = parseCreatedId(response, primaryId);
       if (!recordId) throw new Error(`Create response did not contain ${primaryId}.`);
       audit.requestCounts.businessWrites += 1;

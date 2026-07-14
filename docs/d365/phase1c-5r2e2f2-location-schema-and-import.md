@@ -6,13 +6,13 @@
 - `Runtime Validation Deferred=false`
 - `Location Schema Runtime Ready=true`
 - `Location Schema and Import Ready=false`
-- `Location Residual Mismatch Count=not-applicable`
+- `Location Residual Mismatch Count=51`
 
 The Location schema, Opportunity Lookup, View, Full Replica binding and targeted
 publication are complete. Manual runtime evidence confirms the published native
 Lookup opens in Full Replica without permission, target, component, or loading
-errors. Phase 2F2B remains separately gated and has not started; no Location
-master records were imported.
+errors. Phase 2F2B dry-run passed, but Apply stopped before its first Location
+POST; no Location master records were imported.
 
 ## Environment And Baseline
 
@@ -85,13 +85,14 @@ the local runtime-evidence source supplied by the user.
 
 ## Phase 2F2B Import
 
-Not executed. The external name-only CSV remains unchanged and outside Git.
+Dry-run and Apply were attempted. Apply performed no Dataverse write. The
+external name-only CSV remains unchanged and outside Git.
 
 | Metric | Result |
 | --- | ---: |
 | CSV intended rows | 51 |
-| Dry Run classification | Not executed after runtime gate |
-| Existing Active | Not queried |
+| Dry Run classification | Ready: 0 existing / 51 missing / 0 conflicts |
+| Existing Active | 0 |
 | Created | 0 |
 | Skipped | 0 |
 | Failed | 0 |
@@ -100,7 +101,7 @@ Not executed. The external name-only CSV remains unchanged and outside Git.
 ## Protection And Issues
 
 - P0: 0
-- P1: 0
+- P1: 1 - Location master rows remain missing
 - P2: 0
 - Protected Form: unchanged
 - Actual Management Form/View/Schema: unchanged
@@ -150,3 +151,92 @@ targeting `aigw_location` through `aigw_location_opportunities`; the old
 `aigw_opportunityplace` control count is zero. Full Replica remains 5/19/115/106
 with one native Timeline. Protected Form hashes remain at baseline, the BPF is
 Draft/Inactive, and the plugin protection gate remains 7 enabled / 0 disabled.
+
+## Phase 2F2B Attempt - 2026-07-14
+
+### CSV Final Validation
+
+- Header: exactly `Name`
+- Logical lines: 52
+- Data rows / valid names: 51 / 51
+- Empty names: 0
+- Exact duplicates: 0
+- Trimmed case-insensitive duplicates: 0
+- Extra columns: 0
+- Source metadata, production GUID, state, owner and timestamp columns: absent
+- Original order and internal punctuation: preserved
+- First five: `01: Beijing`, `02: Shanghai`, `03: Tianjin`, `04: Chongqing`, `05: Guangzhou`
+- Last five: `47. National`, `48. Nationwide`, `49. undecided`, `50: Nantong`, `91: Others`
+
+### Dry Run Classification
+
+| Classification | Count |
+| --- | ---: |
+| Existing Active | 0 |
+| Existing Inactive | 0 |
+| Missing | 51 |
+| Ambiguous Duplicate | 0 |
+| Dataverse empty names | 0 |
+
+All 51 CSV names were in the create plan and no names were in the skip or
+conflict lists. The dry run used four GET requests and zero writes.
+
+### Apply Result
+
+The first Apply invocation stopped before its first POST because the importer
+referenced an undefined `ENTITY_SET` symbol instead of the Metadata-derived
+`entitySetName`. The source was repaired surgically and a regression test was
+added. The failed invocation recorded GET=6, POST=0 and Business writes=0.
+
+After the fix passed its focused tests and the full test suite, the second Apply
+invocation stopped while acquiring an authentication token because the identity
+endpoint network request failed. It did not reach the Dataverse POST. Per the
+single-failure stop rule, the importer was not run a third time.
+
+A final read-only dry run confirmed that the environment still has Existing
+Active=0 and Missing=51. Therefore no partial import or residual created record
+exists.
+
+| Result | Count |
+| --- | ---: |
+| Created | 0 |
+| Skipped | 0 |
+| Failed before POST | 1 |
+| Actual persisted rows | 0 |
+| Residual mismatch | 51 |
+
+No test-environment Location GUID was generated. No Opportunity, Form, View,
+App, BPF, Plugin, Actual Management, POL/POD, or Solution component was changed.
+
+### 2F2B Request Accounting
+
+For completed structured Dataverse runs in this attempt:
+
+```text
+GET=14
+POST=0
+PATCH=0
+DELETE=0
+Publish=0
+Business writes=0
+Production requests=0
+```
+
+The interrupted authentication attempt failed before a Dataverse HTTP request
+was sent and is not counted as a Dataverse GET or POST.
+
+### 2F2B Gate
+
+- `Server-side Import Ready=false`
+- `Runtime Validation Deferred=true`
+- `Location Schema Runtime Ready=true`
+- `Location Schema and Import Ready=false`
+- `Location Residual Mismatch Count=51`
+- P0: 0
+- P1: 1 - all 51 Location rows remain missing because Apply stopped before POST
+- P2: 0
+- Later Demo Data use of `aigw_opportunitylocation`: not yet allowed
+
+The next authorized execution must start with a fresh dry run. It may safely
+reuse the idempotent importer after authentication network availability is
+confirmed; it must not modify or delete existing records.
