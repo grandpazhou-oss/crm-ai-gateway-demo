@@ -38,10 +38,10 @@ test("Location CSV blocks exact and normalized duplicates", () => {
 
 test("Location reconciliation separates active, inactive, missing and ambiguous rows", () => {
   const result = classifyLocations(["A", "B", "C", "D"], [
-    { new_locationid: "1", new_name: " a ", statecode: 0 },
-    { new_locationid: "2", new_name: "B", statecode: 1 },
-    { new_locationid: "3", new_name: "D", statecode: 0 },
-    { new_locationid: "4", new_name: "d", statecode: 0 },
+    { aigw_locationid: "1", aigw_name: " a ", statecode: 0 },
+    { aigw_locationid: "2", aigw_name: "B", statecode: 1 },
+    { aigw_locationid: "3", aigw_name: "D", statecode: 0 },
+    { aigw_locationid: "4", aigw_name: "d", statecode: 0 },
   ]);
   assert.equal(result.existingActive.length, 1);
   assert.equal(result.existingInactive.length, 1);
@@ -50,7 +50,7 @@ test("Location reconciliation separates active, inactive, missing and ambiguous 
 });
 
 test("Location create payload contains only the trimmed primary name", () => {
-  assert.deepEqual(buildLocationPayload(" 45.Shandong/Beijing "), { new_name: "45.Shandong/Beijing" });
+  assert.deepEqual(buildLocationPayload(" 45.Shandong/Beijing "), { aigw_name: "45.Shandong/Beijing" });
 });
 
 test("Location import defaults to dry-run and apply remains explicit", () => {
@@ -64,7 +64,10 @@ test("Location import accepts only the approved test hostname", () => {
   assert.throws(() => validateTargetEnvironment("https://example.crm.dynamics.com"), /approved test/);
 });
 
-test("Opportunity location Lookup must resolve uniquely to new_location", () => {
-  const attributes = [{ LogicalName: "new_locationid", SchemaName: "new_LocationId", DisplayName: { LocalizedLabels: [{ LanguageCode: 2052, Label: "案件场所" }] }, Targets: ["new_location"], IsValidForRead: true }];
-  assert.deepEqual(findOpportunityLocationLookups(attributes), [{ logicalName: "new_locationid", schemaName: "new_LocationId", displayNames: { "2052": "案件场所" }, targets: ["new_location"], isValidForRead: true }]);
+test("Opportunity location Lookup resolves only the new project lookup", () => {
+  const attributes = [
+    { LogicalName: "aigw_opportunitylocation", SchemaName: "aigw_OpportunityLocation", DisplayName: { LocalizedLabels: [{ LanguageCode: 2052, Label: "案件场所（Location）" }] }, Targets: ["aigw_location"], IsValidForRead: true },
+    { LogicalName: "aigw_airpollookup", SchemaName: "aigw_AirPolLookup", DisplayName: { LocalizedLabels: [{ LanguageCode: 2052, Label: "空运装货港" }] }, Targets: ["aigw_polpodlocation"], IsValidForRead: true },
+  ];
+  assert.deepEqual(findOpportunityLocationLookups(attributes), [{ logicalName: "aigw_opportunitylocation", schemaName: "aigw_OpportunityLocation", displayNames: { "2052": "案件场所（Location）" }, targets: ["aigw_location"], isValidForRead: true }]);
 });

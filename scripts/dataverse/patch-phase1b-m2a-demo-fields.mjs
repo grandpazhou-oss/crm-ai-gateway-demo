@@ -6,7 +6,7 @@ import { assertDataverseScriptGate, getDataverseUrl, getRequiredEnvironmentId, r
 
 let EXPECTED_URL;
 const SOLUTION = "CRMAIGatewayDemo";
-const FIELDS = ["aigw_opportunityplace", "aigw_globalinitiative", "aigw_alpscooperation", "aigw_sealandpol", "aigw_sealandpod", "aigw_airpol", "aigw_airpod"];
+const FIELDS = ["aigw_globalinitiative", "aigw_alpscooperation", "aigw_sealandpol", "aigw_sealandpod", "aigw_airpol", "aigw_airpod"];
 const SCENARIOS = [
   { place: "East China Demo", seaPol: "Demo Harbor Alpha", seaPod: "Demo Harbor Delta", airPol: "Demo Air Hub Alpha", airPod: "Demo Air Hub Delta" },
   { place: "North China Demo", seaPol: "Demo Harbor Bravo", seaPod: "Demo Harbor Echo", airPol: "Demo Air Hub Bravo", airPod: "Demo Air Hub Echo" },
@@ -39,7 +39,7 @@ export async function main() {
     client.dataverseGet("/api/data/v9.2/EntityDefinitions(LogicalName='opportunity')/Attributes(LogicalName='aigw_globalinitiative')/Microsoft.Dynamics.CRM.PicklistAttributeMetadata?$select=LogicalName&$expand=OptionSet($select=Options)"),
     client.dataverseGet("/api/data/v9.2/EntityDefinitions(LogicalName='opportunity')/Attributes(LogicalName='aigw_alpscooperation')/Microsoft.Dynamics.CRM.BooleanAttributeMetadata?$select=LogicalName&$expand=OptionSet($select=TrueOption,FalseOption)"),
   ]);
-  const expectedTypes = { aigw_opportunityplace: "String", aigw_globalinitiative: "Picklist", aigw_alpscooperation: "Boolean", aigw_sealandpol: "String", aigw_sealandpod: "String", aigw_airpol: "String", aigw_airpod: "String" };
+  const expectedTypes = { aigw_globalinitiative: "Picklist", aigw_alpscooperation: "Boolean", aigw_sealandpol: "String", aigw_sealandpod: "String", aigw_airpol: "String", aigw_airpod: "String" };
   for (const attribute of attributes) if (attribute.AttributeType !== expectedTypes[attribute.LogicalName]) throw new Error(`Unexpected type for ${attribute.LogicalName}: ${attribute.AttributeType}`);
   const noneOption = (globalInitiative.body.OptionSet?.Options || []).find((option) => /(^|:)\s*(None|无|Others)\s*$/i.test(label(option)["1033"] || "") || /(^|:)\s*(None|无|Others)\s*$/i.test(label(option)["2052"] || ""));
   if (!noneOption) throw new Error("No safe None/无/Others option exists for aigw_globalinitiative; no patch plan generated.");
@@ -51,7 +51,6 @@ export async function main() {
   const plan = rows.map((row, rowIndex) => {
     const scenario = SCENARIOS[rowIndex % SCENARIOS.length];
     const proposed = {
-      aigw_opportunityplace: scenario.place,
       aigw_globalinitiative: Number(noneOption.Value),
       aigw_alpscooperation: false,
       aigw_sealandpol: scenario.seaPol,

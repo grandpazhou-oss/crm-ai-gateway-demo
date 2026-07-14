@@ -4,10 +4,8 @@ import { createDynamicsClient } from "../../server/dynamicsClient.mjs";
 import { assertDataverseScriptGate, getDataverseUrl, runDataverseCli } from "./lib/environment-safety.mjs";
 
 const TARGET_HOSTNAME = ["org91f5f65f", "crm5", "dynamics", "com"].join(".");
-const TABLE = "new_location";
-const ENTITY_SET = "new_locations";
-const PRIMARY_ID = "new_locationid";
-const PRIMARY_NAME = "new_name";
+const TABLE = "aigw_location";
+const PRIMARY_NAME = "aigw_name";
 
 const normalizeName = (value) => String(value ?? "").trim().toLowerCase();
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -122,7 +120,7 @@ export function buildLocationPayload(name) {
   return { [PRIMARY_NAME]: String(name).trim() };
 }
 
-export function classifyLocations(names, existingRows) {
+export function classifyLocations(names, existingRows, primaryId = "aigw_locationid") {
   const byName = new Map();
   for (const row of existingRows) {
     const key = normalizeName(row[PRIMARY_NAME]);
@@ -133,9 +131,9 @@ export function classifyLocations(names, existingRows) {
   for (const name of names) {
     const rows = byName.get(normalizeName(name)) || [];
     if (rows.length === 0) result.missing.push({ name });
-    else if (rows.length > 1) result.ambiguousDuplicate.push({ name, recordIds: rows.map((row) => row[PRIMARY_ID]) });
-    else if (Number(rows[0].statecode) === 0) result.existingActive.push({ name, recordId: rows[0][PRIMARY_ID] });
-    else result.existingInactive.push({ name, recordId: rows[0][PRIMARY_ID], statecode: rows[0].statecode });
+    else if (rows.length > 1) result.ambiguousDuplicate.push({ name, recordIds: rows.map((row) => row[primaryId]) });
+    else if (Number(rows[0].statecode) === 0) result.existingActive.push({ name, recordId: rows[0][primaryId] });
+    else result.existingInactive.push({ name, recordId: rows[0][primaryId], statecode: rows[0].statecode });
   }
   return result;
 }
@@ -153,10 +151,7 @@ export function findOpportunityLocationLookups(attributes) {
       targets: attribute.Targets || [],
       isValidForRead: attribute.IsValidForRead,
     }))
-    .filter((attribute) => {
-      const labels = Object.values(attribute.displayNames).map((label) => String(label).trim().toLowerCase());
-      return labels.some((label) => label === "案件场所" || label === "case location") || /location/i.test(attribute.logicalName || "");
-    });
+    .filter((attribute) => attribute.logicalName === "aigw_opportunitylocation");
 }
 
 function requiredUserFields(attributes) {
@@ -166,8 +161,8 @@ function requiredUserFields(attributes) {
     && attribute.IsValidForCreate === true);
 }
 
-function parseCreatedId(response) {
-  const bodyId = response?.body?.[PRIMARY_ID];
+function parseCreatedId(response, primaryId) {
+  const bodyId = response?.body?.[primaryId];
   if (bodyId) return String(bodyId).replace(/[{}]/g, "").toLowerCase();
   const entityId = response?.headers?.get?.("odata-entityid") || response?.headers?.get?.("OData-EntityId") || "";
   const match = /\(([0-9a-f-]{36})\)/i.exec(entityId);
@@ -237,7 +232,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env } =
   };
 
   const entity = await get(`/api/data/v9.2/EntityDefinitions(LogicalName='${TABLE}')?$select=LogicalName,EntitySetName,PrimaryIdAttribute,PrimaryNameAttribute,MetadataId`);
-  if (entity.LogicalName !== TABLE || entity.EntitySetName !== ENTITY_SET || entity.PrimaryIdAttribute !== PRIMARY_ID || entity.PrimaryNameAttribute !== PRIMARY_NAME) {
+  if (entity.LogicalName !== TABLE || !entity.EntitySetName || !entity.PrimaryIdAttribute || entity.PrimaryNameAttribute !== PRIMARY_NAME) {
     audit.status = "blocked_metadata_mismatch";
     audit.metadata = entity;
     const output = await writeAudit(audit);
@@ -259,16 +254,18 @@ export async function main({ argv = process.argv.slice(2), env = process.env } =
   const opportunityLookups = await get("/api/data/v9.2/EntityDefinitions(LogicalName='opportunity')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=LogicalName,SchemaName,DisplayName,Targets,IsValidForRead");
   const lookupCandidates = findOpportunityLocationLookups(opportunityLookups.value || []);
   audit.lookupCandidates = lookupCandidates;
-  if (lookupCandidates.length !== 1 || !lookupCandidates[0].targets.includes(TABLE)) {
+  if (lookupCandidates.length !== 1 || lookupCandidates[0].logicalName !== "aigw_opportunitylocation" || !lookupCandidates[0].targets.includes(TABLE)) {
     audit.status = "blocked_lookup_mapping";
     const output = await writeAudit(audit);
     console.log(JSON.stringify({ status: audit.status, lookupCandidates, requestCounts: audit.requestCounts, output }, null, 2));
     throw new Error("Opportunity case-location Lookup mapping is not uniquely confirmed.");
   }
 
-  const readLocations = () => getAll(`/api/data/v9.2/${ENTITY_SET}?$select=${PRIMARY_ID},${PRIMARY_NAME},statecode&$top=5000`);
+  const entitySetName = entity.EntitySetName;
+  const primaryId = entity.PrimaryIdAttribute;
+  const readLocations = () => getAll(`/api/data/v9.2/${entitySetName}?$select=${primaryId},${PRIMARY_NAME},statecode,statuscode&$top=5000`);
   const beforeRows = await readLocations();
-  const classification = classifyLocations(csv.names, beforeRows);
+  const classification = classifyLocations(csv.names, beforeRows, primaryId);
   audit.metadata = { entity, primaryName, extraRequiredCount: 0 };
   audit.before = { totalRecords: beforeRows.length };
   audit.classification = classification;
@@ -289,7 +286,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env } =
 
   for (const item of classification.missing) {
     const currentRows = await readLocations();
-    const current = classifyLocations([item.name], currentRows);
+    const current = classifyLocations([item.name], currentRows, primaryId);
     if (current.existingInactive.length || current.ambiguousDuplicate.length) {
       audit.failed.push({ name: item.name, reason: "concurrent conflict detected" });
       break;
@@ -297,8 +294,8 @@ export async function main({ argv = process.argv.slice(2), env = process.env } =
     if (current.existingActive.length) continue;
     try {
       const response = await request("POST", `/api/data/v9.2/${ENTITY_SET}`, buildLocationPayload(item.name));
-      const recordId = parseCreatedId(response);
-      if (!recordId) throw new Error("Create response did not contain new_locationid.");
+      const recordId = parseCreatedId(response, primaryId);
+      if (!recordId) throw new Error(`Create response did not contain ${primaryId}.`);
       audit.requestCounts.businessWrites += 1;
       audit.created.push({ name: item.name, recordId, httpStatus: response.status });
     } catch (error) {
@@ -308,7 +305,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env } =
   }
 
   const afterRows = await readLocations();
-  const afterClassification = classifyLocations(csv.names, afterRows);
+  const afterClassification = classifyLocations(csv.names, afterRows, primaryId);
   const residualMismatchCount = afterClassification.missing.length + afterClassification.existingInactive.length + afterClassification.ambiguousDuplicate.length;
   audit.after = { totalRecords: afterRows.length, classification: afterClassification, residualMismatchCount };
   audit.status = audit.failed.length || residualMismatchCount ? "partial_or_failed" : "complete";

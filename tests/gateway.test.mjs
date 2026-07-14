@@ -290,7 +290,7 @@ test("Dynamics demo sync fetchxml uses escaped AI-DEMO prefix and selected field
 test("field source metadata separates Sales Trial API fields from company CRM target fields", () => {
   const salesTrialFields = opportunityFieldMapping.filter((field) => field.sourceSystem === "sales_trial_d365");
   assert.equal(salesTrialFields.length > 0, true);
-  assert.equal(salesTrialFields.every((field) => ["active_after_trial_field_created", "needs_replacement", "simplified_text_simulation"].includes(field.mappingStatus) && field.realLogicalNameConfirmed.company === true), true);
+  assert.equal(salesTrialFields.every((field) => ["active_after_trial_field_created", "needs_replacement", "simplified_text_simulation", "implemented_lookup"].includes(field.mappingStatus) && field.realLogicalNameConfirmed.company === true), true);
 
   const trialCreated = salesTrialFields.filter((field) => field.realLogicalNameConfirmed.trial === true && field.mappingStatus === "active_after_trial_field_created");
   assert.equal(trialCreated.every((field) => field.includeInSelect === true && Boolean(field.d365Name)), true);
@@ -327,10 +327,14 @@ test("replacement fields are active and legacy mismatched fields stay out of Dat
   const place = opportunityFieldMapping.find((item) => item.appName === "opportunityPlace");
   assert.equal(place.companyLogicalName, "new_location");
   assert.equal(place.companyType, "lookup");
-  assert.equal(place.trialType, "text");
-  assert.equal(place.mappingStatus, "simplified_text_simulation");
+  assert.equal(place.trialType, "lookup");
+  assert.equal(place.mappingStatus, "implemented_lookup");
+  assert.equal(place.trialLogicalName, "aigw_opportunitylocation");
+  assert.equal(place.d365Name, "_aigw_opportunitylocation_value");
+  assert.equal(place.includeInSelect, false);
   assert.equal(place.includeInSafeContext, false);
   assert.equal(select.includes("aigw_opportunityplace"), false);
+  assert.equal(select.includes("_aigw_opportunitylocation_value"), false);
 });
 
 test("choice option values and labels normalize correctly", () => {

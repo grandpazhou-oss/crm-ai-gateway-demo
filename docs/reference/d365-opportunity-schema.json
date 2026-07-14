@@ -100,8 +100,8 @@
     },
     {
       "sourceLogicalName": "new_location",
-      "targetLogicalName": "aigw_opportunityplace",
-      "type": "text",
+      "targetLogicalName": "aigw_opportunitylocation",
+      "type": "lookup",
       "purpose": "basic:opportunityPlace",
       "safeContextPolicy": "exclude",
       "providerPayloadPolicy": "forbidden"
