@@ -2,7 +2,7 @@
 
 ## Status
 
-This 5-8 minute route is prepared but **not execution-ready** because the controlled R2E-5 dataset was not created. Do not present existing business or sample records as substitutes for the missing `[AI-DEMO-R2E5]` records.
+This 5-8 minute route now has a server-verified One-Actual dataset. It remains **runtime-verification pending** until `CRM AI Demo User` completes the read-only route without a P0/P1 error.
 
 ## Preconditions
 
@@ -10,6 +10,8 @@ This 5-8 minute route is prepared but **not execution-ready** because the contro
 - Open only `CRM AI Gateway Demo - Modern` in `org91f5f65f.crm5.dynamics.com`.
 - Confirm the selected record begins with `[AI-DEMO-R2E5]`.
 - Confirm the corrected dataset follows the deployed one-Actual-per-Opportunity contract.
+- Primary demonstration Opportunity: `[AI-DEMO-R2E5] Monthly Actuals Scenario` (`4d1cfb52-2c80-f111-ab0e-000d3a82d194`).
+- Comparison Opportunity: `[AI-DEMO-R2E5] Pipeline Comparison Scenario` (`cf1cfb52-2c80-f111-ab0e-000d3a82d194`).
 - Do not invoke an external LLM. AI explanations must describe the Safe Context boundary only.
 
 ## 5-8 Minute Route
@@ -74,6 +76,10 @@ Return to the Opportunity summary without saving. Confirm that the demonstration
 ## Readiness
 
 - Script structure ready: `true`
-- Controlled dataset ready: `false`
+- Controlled dataset ready: `true`
 - Ordinary-user runtime acceptance ready: `false`
 - `R2E Demo Ready=false`
+
+## Corrected One-Actual Run
+
+The route must show one Actual row containing April-July Revenue `100/200/300/400`, generated Annual Actual Revenue `1,000`, and parent annual Revenue `1,000`. The comparison Opportunity must show no Actual row. Runtime acceptance remains pending because the browser-control connection could not capture a verifiable ordinary-user session; do not substitute an administrator session.

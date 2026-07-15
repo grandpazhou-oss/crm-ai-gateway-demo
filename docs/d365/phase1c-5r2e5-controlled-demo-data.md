@@ -3,11 +3,107 @@
 ## Result
 
 - Environment: `org91f5f65f.crm5.dynamics.com`
-- Status: `Blocked before first business write`
+- Current status: `Corrected One-Actual server-side run complete; ordinary-user runtime verification deferred`
 - Synthetic prefix: `[AI-DEMO-R2E5]`
-- Created Account / Opportunity / Actual: `0 / 0 / 0`
+- Created Account / Opportunity / Actual: `1 / 2 / 1`
 - Production requests: `0`
 - `R2E Demo Ready=false`
+
+The original blocked result is preserved below. A separately authorized corrected run subsequently used the One-Actual option.
+
+## Corrected One-Actual Run
+
+### Created Records
+
+| Type | Name | Test-environment ID |
+|---|---|---|
+| Account | `[AI-DEMO-R2E5] Synthetic Logistics Account` | `bc1bfb52-2c80-f111-ab0e-000d3a82d194` |
+| Opportunity | `[AI-DEMO-R2E5] Monthly Actuals Scenario` | `4d1cfb52-2c80-f111-ab0e-000d3a82d194` |
+| Opportunity | `[AI-DEMO-R2E5] Pipeline Comparison Scenario` | `cf1cfb52-2c80-f111-ab0e-000d3a82d194` |
+| Actual Management | `[AI-DEMO-R2E5] Four-Month Actual` | `f91cfb52-2c80-f111-ab0e-000d3a82d194` |
+
+All names use the approved prefix. The values, descriptions, dates, and amounts are synthetic. No production GUID was imported.
+
+### Four-Month And Plugin Validation
+
+| Field | Saved value |
+|---|---:|
+| April Revenue | 100 |
+| May Revenue | 200 |
+| June Revenue | 300 |
+| July Revenue | 400 |
+| Generated Annual Actual Revenue | 1,000 |
+| Parent Opportunity annual Revenue | 1,000 |
+
+- The Actual is related only to `4d1cfb52-2c80-f111-ab0e-000d3a82d194`.
+- That Opportunity has exactly one Actual.
+- `cf1cfb52-2c80-f111-ab0e-000d3a82d194` has zero Actuals and no parent annual total.
+- The Actual inherits CNY from the Opportunity.
+- Location resolves to existing `01: Beijing` (`1f4e1d38-537f-f111-ab0e-70a8a5007736`).
+- All four POL/POD lookups reuse existing `9999: OTR` (`801b12b1-987e-f111-ab0e-002248eb1915`).
+- No Location or POL/POD master data was created or changed.
+- Neither `aigw_yearrevenueactualcny` nor any generated annual/base field was present in a create payload.
+- The created Opportunity has Activity/Note counts `0/0`.
+
+### Runtime Validation
+
+Server-side readiness is true. Browser control timed out twice while obtaining a read-only Dynamics DOM/screenshot, and no currently controllable tab provided verifiable `CRM AI Demo User` evidence. An administrator session was not accepted as a substitute.
+
+The following ordinary-user checks therefore remain pending:
+
+- both Opportunities visible in the list;
+- Full Replica route;
+- Location and POL/POD rendering;
+- one-row Actual subgrid and annual total;
+- native Timeline and BPF display;
+- absence of permission, loading, and console P0/P1 errors.
+
+No browser save, create, update, or delete action occurred.
+
+### Corrected Cleanup Manifest
+
+Delete only these IDs, in this order, under separate cleanup authorization:
+
+1. Actual Management: `f91cfb52-2c80-f111-ab0e-000d3a82d194`
+2. Opportunity: `4d1cfb52-2c80-f111-ab0e-000d3a82d194`
+3. Opportunity: `cf1cfb52-2c80-f111-ab0e-000d3a82d194`
+4. Account: `bc1bfb52-2c80-f111-ab0e-000d3a82d194`
+
+Location and POL/POD arrays are explicitly empty.
+
+### Corrected Run Requests
+
+```text
+GET=101
+POST=4
+PATCH=0
+DELETE=0
+Publish=0
+Client business creates=4
+Expected Plugin parent-total side effect=1
+Production requests=0
+```
+
+The first Apply attempt failed at the local test-environment classification gate before authentication or any Dataverse request. The successful Apply used process-local test classification and production denylist values; no `.env` or global authentication configuration was changed.
+
+### Corrected Run Gates
+
+| Gate | Result |
+|---|---|
+| Synthetic Data Only | true |
+| Baseline Opportunity Preserved | true |
+| Duplicate Demo Records | 0 |
+| One Actual Per Opportunity Ready | true |
+| Four Month Fields Ready | true |
+| Demo Relationships Valid | true |
+| Actual Totals Plugin Ready | true |
+| Ordinary User Demo Runtime Ready | false - browser evidence deferred |
+| Cleanup Manifest Ready | true |
+| Protected Form/BPF/Plugin Integrity | true |
+| Production Isolation Ready | true |
+| R2E Demo Ready | false |
+
+Corrected-run issue count: P0=`0`, P1=`1` (ordinary-user browser evidence unavailable), P2=`0`.
 
 ## Blocking Contract Conflict
 
