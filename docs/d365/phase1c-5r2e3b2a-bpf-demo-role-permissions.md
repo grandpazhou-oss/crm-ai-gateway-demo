@@ -1,164 +1,136 @@
-# Phase 1C-5R2E-3B2A Dedicated Demo BPF Security Role Setup
+# Phase 1C-5R2E-3B2A-R Demo BPF User Permission Verification
 
 ## Result
 
-- `Non-admin Demo Test User Ready=false`
+- `Non-admin Demo Test User Ready=true`
 - `BPF Demo User Permission Ready=false`
+- `App Access Ready=true`
+- `Full Replica Access Ready=true`
 - `BPF Process Order Change Ready=false`
 - `BPF Runtime Test Ready=false`
 
-The mandatory user-selection gate failed before any write. The test environment contains only one enabled interactive user, Zhou Wenzhe, who is explicitly excluded from ordinary-user evidence and has System Administrator. All other enabled rows are Application Users or special non-interactive Support/Delegated identities.
+The newly provisioned interactive user, dedicated role, App sharing, BPF backing-table permissions, and Full Replica form access were verified with read-only Dataverse requests. The final permission gate remains blocked because the union of the user's two direct roles does not grant Opportunity Write, Append, or Append To. No role, App, process order, BPF instance, Opportunity, or other Dataverse data was changed.
 
-No security role was created, no privilege was changed, no user-role assignment was made, and no App or BPF access configuration was changed.
+## Environment
 
-## Environment And Preflight
-
-- Environment: `org91f5f65f.crm5.dynamics.com`
-- Target BPF: `销售流程 - AI Demo Full Replica`
-- Workflow ID: `7325b274-6b7c-f111-ab0e-70a8a50388b9`
+- Test hostname: `org91f5f65f.crm5.dynamics.com`
 - Production requests: 0
+- Target App: `CRM AI Gateway Demo - Modern`
+- Target BPF: `销售流程 - AI Demo Full Replica`
+- Backing table: `aigw_ai_demo_full_replica`
 
-| Gate | Result |
+## Test User
+
+| Property | Result |
 |---|---|
-| BPF state | Active / Activated |
-| Process order | 100 |
+| Display name | CRM AI Demo User |
+| User principal name | `crm-ai-demo-user@sgtpepperb.onmicrosoft.com` |
+| System user ID | `85f6e9a0-ef7f-f111-ab0f-000d3a857307` |
+| Enabled | Yes |
+| Access mode | Normal interactive (`0`) |
+| Application User | No |
+| Support / delegated identity | No |
+| Dataverse licensed | Yes |
+| System Administrator | No |
+| System Customizer | No |
+| Environment Maker | No |
+| Team-inherited roles | None |
+
+### Direct Roles
+
+1. `Basic User` (`eb481a2f-cd6d-f111-ab0d-00224818ead9`)
+2. `CRM AI Demo BPF User` (`63399c4d-f17f-f111-ab0e-000d3a82d194`)
+
+The role assignments are direct and both roles belong to the user's Business Unit. The user-supplied manual runtime evidence confirms that this identity can sign in interactively, open the Modern App, and display the Opportunity list without writing data.
+
+## Dedicated Role
+
+The unmanaged `CRM AI Demo BPF User` role exists exactly once and is directly assigned to the target user.
+
+### Backing Table Privileges
+
+| Privilege | Depth | Result |
+|---|---:|---|
+| Read | Organization | Pass |
+| Create | Organization | Pass |
+| Write | Organization | Pass |
+| Append | Organization | Pass |
+| Append To | Organization | Pass |
+| Delete | None | Pass |
+| Assign | None / not exposed for this table | Pass |
+| Share | None / not exposed for this table | Pass |
+
+The required five privileges are supplied by the dedicated role rather than inferred from an administrator account.
+
+### Additional Role Privileges
+
+The dedicated role contains a broad platform baseline in addition to the BPF permissions. Material extra data privileges include:
+
+- Account: Read at Organization depth; Create, Write, Delete, Assign, Share, Append, and Append To at User depth.
+- Location: Read, Create, Write, Append, and Append To at Organization depth; no Delete.
+- Actual Management: Read at Organization depth.
+- Opportunity: Read at Organization depth only.
+- Workflow and App Module: Read privileges are present.
+- Standard platform privileges for metadata, user settings, timeline, import, SharePoint integration, and other first-party capabilities are also present.
+
+No Delete, Assign, or Share permission is assigned for `aigw_ai_demo_full_replica`. The broader non-BPF baseline was not modified and should receive a separate least-privilege review before production reuse.
+
+## Effective Business Permissions
+
+Effective permissions were calculated from the complete privilege collections of both direct roles. There are no Team roles to add.
+
+| Resource | Required | Effective result |
+|---|---|---|
+| Opportunity | Read | Pass, Organization depth |
+| Opportunity | Write | **Fail, not assigned** |
+| Opportunity | Append | **Fail, not assigned** |
+| Opportunity | Append To | **Fail, not assigned** |
+| Account | Read | Pass, Organization depth |
+| Actual Management | Read | Pass, Organization depth |
+| Location | Read | Pass, Organization depth |
+| BPF definition | Read / use definition | Pass, `prvReadWorkflow` assigned |
+| Model-driven App | Read | Pass, `prvReadAppModule` assigned |
+
+Because Opportunity Write, Append, and Append To are mandatory for the requested ordinary-user gate, `BPF Demo User Permission Ready` cannot be true in this phase.
+
+## App And Form Access
+
+The Modern App is Active and Unmanaged. Its role associations include both `Basic User` and `CRM AI Demo BPF User`. The target BPF is included exactly once as `componenttype=29` and points to workflow `7325b274-6b7c-f111-ab0e-70a8a50388b9`.
+
+The App still exposes the expected Opportunity and Actual Management experience. The user's manual runtime evidence confirms successful App and Opportunity-list access.
+
+The supported `RetrieveFilteredForms` function was executed for CRM AI Demo User. It returned five Opportunity Main Forms with Full Replica first, including:
+
+1. Full Replica `97a1555b-0903-408a-ac63-d63aed65b14a`
+2. Protected Form `8db60b46-b976-f111-ab0e-00224817cb31`
+3. Three other available Opportunity Main Forms
+
+This proves the target user is not excluded by the Full Replica security-role condition. No form was opened or saved by this server-side verification.
+
+## BPF State
+
+| Property | Result |
+|---|---|
+| State / status | Active / Activated (`1` / `2`) |
 | Primary entity | `opportunity` |
+| Process order | 100, unchanged |
+| Stages / steps | 2 / 4, unchanged |
 | Definition SHA-256 | `59819cd865fd39c5a838441cad21979e4e1a08387b3bb62eab2285e07c213f08` |
-| Backing table | `aigw_ai_demo_full_replica` |
-| Entity Set | `aigw_ai_demo_full_replicas` |
-| Object Type Code | 11730 |
+| Backing Entity Set | `aigw_ai_demo_full_replicas` |
 | Backing rows | 0 |
-| Modern App target BPF components | 1 |
+| Modern App BPF components | 1 |
 
-## Non-Administrator Candidate Audit
-
-### Environment Summary
-
-- Enabled `systemuser` rows: 193
-- Enabled normal interactive users (`accessmode=0`, non-Application User): 1
-- Qualifying non-admin candidates after exclusions: 0
-- Remaining enabled rows: Application Users or special Support/Delegated access modes
-
-### Interactive User
-
-| Display Name | System User ID | Current roles | Candidate | Reason |
-|---|---|---|---|---|
-| Zhou Wenzhe | `df4b1a2f-cd6d-f111-ab0d-00224818ead9` | System Administrator; Basic User | No | Explicitly excluded and administrator-capable |
-
-No enabled interactive user was found who simultaneously:
-
-- has Basic User or an equivalent foundation role,
-- has no System Administrator, System Customizer, Environment Maker, or equivalent bypass role,
-- is not Zhou Wenzhe,
-- and can be used as an existing test-environment Demo identity.
-
-Application Users were not reclassified as ordinary browser users. Support User and Delegated Admin special access modes were not selected.
-
-## Required Manual Preparation
-
-Before resuming this phase, prepare one existing Entra-backed test user in this Dataverse environment with:
-
-1. Enabled normal interactive access (`accessmode=0`).
-2. A valid license and test-environment access.
-3. Basic User or an equivalent minimal business role.
-4. No System Administrator, System Customizer, Environment Maker, delegated administrator, or comparable bypass role.
-5. Membership in the intended Business Unit.
-6. Ability to open `CRM AI Gateway Demo - Modern` through existing App sharing or an explicitly approved role association.
-
-Do not remove Zhou Wenzhe's administrator role to manufacture a candidate. Do not create a new Entra user through this automation.
-
-## Selected Test User
-
-None.
-
-Because selection failed, Business Unit role scope could not be established safely and the custom role creation gate did not open.
-
-## Custom Role
-
-| Item | Result |
-|---|---|
-| Intended name | `CRM AI Gateway Demo BPF User` |
-| Existing-role reuse check | Deferred until a target Business Unit exists |
-| Role created | No |
-| Basic User modified | No |
-| System Administrator modified | No |
-
-No cross-Business-Unit role was guessed or created.
-
-## Backing Table Permission Matrix
-
-The intended contract remains:
-
-| Privilege | Intended depth | Configured this phase |
-|---|---|---|
-| Read | Organization | No |
-| Create | Organization | No |
-| Write | Organization | No |
-| Append | Organization | No |
-| Append To | Organization | No |
-| Delete | None | No |
-| Assign | None | No |
-| Share | None | No |
-
-The backing table exposes all five required privilege definitions, but no role privilege was added because there is no authorized target user/Business Unit.
-
-## BPF Role Access Matrix
-
-| Role | Before | After |
-|---|---|---|
-| System Administrator | Existing access | Unchanged |
-| System Customizer | Existing platform behavior | Unchanged |
-| Basic User | No backing-table privileges | Unchanged |
-| CRM AI Gateway Demo BPF User | Does not exist in an authorized target BU | Not added |
-
-The BPF was not opened to all roles and no other process access was changed.
-
-## Modern App Sharing
-
-- Target test user: none
-- App sharing check for a selected user: not applicable
-- App role association changes: 0
-- App page/navigation/component changes: 0
-- App publish: 0
-
-## Role Assignment
-
-- Selected Test User ID: none
-- Role ID: none
-- Assignments created: 0
-- Existing assignments removed: 0
-
-## Effective Permission Read-Back
-
-Not applicable because no qualifying non-admin user and no supplemental role exist. System Administrator evidence from the previous phase is not reused as ordinary Demo-role evidence.
-
-## Process Order
-
-| Order | Process | Result |
-|---:|---|---|
-| 1 | Follow up with Opportunity | Unchanged |
-| 1 | Sales Process | Unchanged |
-| 100 | 销售流程 - AI Demo Full Replica | Unchanged |
-
-No Order Process Flow operation was executed.
-
-## ALM Deferred
-
-`EXPECTED_ALM_FOLLOW_UP`
-
-The backing Entity remains in Active and Default Solution membership, without a directly confirmed `CRMAIGatewayDemo` Entity component. This does not affect the no-write user gate result and was not modified.
+No BPF instance exists and no process-order operation was executed.
 
 ## Protection Verification
 
 | Gate | Result |
 |---|---|
-| BPF | Active / Activated |
-| Definition hash | Unchanged |
-| Process order | 100 |
-| Backing rows | 0 |
-| Full Replica | 5 / 19 / 115 / 106 |
-| Native Timeline | 1 |
+| Full Replica | Active, non-default; 5 / 19 / 115 / 106 |
+| Native Timeline / old Timeline | 1 / 0 |
 | Protected Form FormXML hash | `5519ce235d63873d934fc5dbd4b9fdb703e9a62e692d2c38e03396f7688030b7` |
+| Protected Form FormJSON hash | `94de2fe47db7300420c7fcf73c6c1ff24d830aefea9f4a1a765daf4cd728b8f9` |
+| Plugin Assembly / Types / Steps | 1 / 3 / 7 |
 | Plugin Enabled / Disabled | 7 / 0 |
 | Actual Main Form | 1 / 5 / 41 |
 | Location Active | 51 |
@@ -174,36 +146,38 @@ None.
 
 ### P1
 
-1. No qualifying existing non-administrator interactive Demo test user is available.
-2. Consequently the supplemental role, backing-table privilege contract, BPF role access, App access, and user assignment cannot be completed or validated.
+1. CRM AI Demo User lacks effective Opportunity Write, Append, and Append To privileges. The ordinary-user BPF permission gate and process-order-change authorization remain blocked.
 
 ### P2
 
-1. Backing Entity ALM membership remains deferred.
-2. Process order remains 100.
-3. Ordinary-user browser testing has not been performed.
+1. The dedicated role contains a broader first-party baseline than the five BPF backing-table privileges; review least privilege separately before production reuse.
+2. The target process remains at order 100 behind the existing order-1 processes.
+3. Ordinary-user Opportunity/BPF runtime testing has not been performed and remains explicitly blocked.
 
 ## Request Accounting
 
-- GET: 593
+- GET: 45
 - POST: 0
 - PATCH: 0
 - DELETE: 0
 - Publish: 0
 - Activation / Deactivation: 0
+- Process-order changes: 0
 - Security-role writes: 0
 - User-role assignments: 0
 - BPF instance writes: 0
 - Opportunity business writes: 0
 - Production requests: 0
 
-The high GET count came from the initial read-only enumeration of all 193 enabled system users, their direct roles, Team memberships, and inherited Team roles. No authentication material or user secrets were recorded.
+One exploratory metadata GET returned HTTP 400 and one incorrectly scoped `RetrieveFilteredForms` GET returned HTTP 404 before the supported collection-bound function was used successfully. These were read-only failures and produced no state change.
 
 ## Final Gate
 
-- `Non-admin Demo Test User Ready=false`
+- `Non-admin Demo Test User Ready=true`
 - `BPF Demo User Permission Ready=false`
+- `App Access Ready=true`
+- `Full Replica Access Ready=true`
 - `BPF Process Order Change Ready=false`
 - `BPF Runtime Test Ready=false`
 
-Resume only after an eligible existing non-admin interactive user has been provisioned manually. Do not modify Process Order or run BPF runtime tests before the dedicated role and effective-permission gates pass.
+Do not change process order or start BPF runtime testing. A separately authorized role correction must add the missing Opportunity Write, Append, and Append To privileges, followed by a fresh read-only effective-permission verification.
