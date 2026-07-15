@@ -1,15 +1,15 @@
-# Phase 1C-5R2E-3B2A-R2 Opportunity Permission Correction Verification
+# Phase 1C-5R2E-3B2A-R2V Opportunity Permission Correction Final Verification
 
 ## Result
 
 - `Non-admin Demo Test User Ready=true`
-- `BPF Demo User Permission Ready=false`
+- `BPF Demo User Permission Ready=true`
 - `App Access Ready=true`
 - `Full Replica Access Ready=true`
-- `BPF Process Order Change Ready=false`
+- `BPF Process Order Change Ready=true`
 - `BPF Runtime Test Ready=false`
 
-The interactive user, dedicated role, App sharing, BPF backing-table permissions, and Full Replica form access remain valid. However, the reported manual Opportunity permission correction is not present in Dataverse: two independent read paths still show only Organization-level Read, with Write, Append, and Append To unassigned. No role, App, process order, BPF instance, Opportunity, or other Dataverse data was changed.
+The interactive user, dedicated role, App sharing, BPF backing-table permissions, and Full Replica form access remain valid. The final Opportunity correction is now present: two independent read paths agree that Read, Write, Append, and Append To are assigned at Organization depth, while Create, Delete, Assign, and Share remain unassigned. No role, App, process order, BPF instance, Opportunity, or other Dataverse data was changed.
 
 ## Environment
 
@@ -69,7 +69,7 @@ The dedicated role contains a broad platform baseline in addition to the BPF per
 - Account: Read at Organization depth; Create, Write, Delete, Assign, Share, Append, and Append To at User depth.
 - Location: Read, Create, Write, Append, and Append To at Organization depth; no Delete.
 - Actual Management: Read at Organization depth.
-- Opportunity: Read at Organization depth only.
+- Opportunity: Read, Write, Append, and Append To at Organization depth; no Create, Delete, Assign, or Share.
 - Workflow and App Module: Read privileges are present.
 - Standard platform privileges for metadata, user settings, timeline, import, SharePoint integration, and other first-party capabilities are also present.
 
@@ -82,25 +82,29 @@ Effective permissions were calculated from the complete privilege collections of
 | Resource | Required | Effective result |
 |---|---|---|
 | Opportunity | Read | Pass, Organization depth |
-| Opportunity | Write | **Fail, not assigned** |
-| Opportunity | Append | **Fail, not assigned** |
-| Opportunity | Append To | **Fail, not assigned** |
+| Opportunity | Write | Pass, Organization depth |
+| Opportunity | Append | Pass, Organization depth |
+| Opportunity | Append To | Pass, Organization depth |
+| Opportunity | Create | Pass, not assigned |
+| Opportunity | Delete | Pass, not assigned |
+| Opportunity | Assign | Pass, not assigned |
+| Opportunity | Share | Pass, not assigned |
 | Account | Read | Pass, Organization depth |
 | Actual Management | Read | Pass, Organization depth |
 | Location | Read | Pass, Organization depth |
 | BPF definition | Read / use definition | Pass, `prvReadWorkflow` assigned |
 | Model-driven App | Read | Pass, `prvReadAppModule` assigned |
 
-Because Opportunity Write, Append, and Append To are mandatory for the requested ordinary-user gate, `BPF Demo User Permission Ready` cannot be true in this phase.
+The required Opportunity permission contract is complete and contains none of the four prohibited rights.
 
 ### Correction Read-Back
 
-After the initial role read showed the three permissions absent, the verification waited 15 seconds once for propagation and then read the role through two independent paths:
+The final verification read the role through two independent paths:
 
-1. `roleprivileges_association` returned only `prvReadOpportunity` among the eight Opportunity rights checked.
-2. `RetrieveRolePrivilegesRole` returned `Global` for Read and no depth for Write, Append, Append To, Create, Delete, Assign, or Share.
+1. `roleprivileges_association` returned exactly `prvReadOpportunity`, `prvWriteOpportunity`, `prvAppendOpportunity`, and `prvAppendToOpportunity` among the eight Opportunity rights checked.
+2. `RetrieveRolePrivilegesRole` returned `Global` for the same four rights and no depth for Create, Delete, Assign, or Share.
 
-The result is therefore not classified as a transient single-query discrepancy. The role must be reviewed and saved manually before another read-only verification. This phase did not attempt to repair it.
+The two paths agree, so no delayed second read was required. This phase did not modify the role.
 
 ## App And Form Access
 
@@ -155,7 +159,7 @@ None.
 
 ### P1
 
-1. The reported Opportunity correction is not present: CRM AI Demo User still lacks effective Write, Append, and Append To. The ordinary-user BPF permission gate and process-order-change authorization remain blocked.
+None.
 
 ### P2
 
@@ -165,7 +169,7 @@ None.
 
 ## Request Accounting
 
-- GET: 25
+- GET: 22
 - POST: 0
 - PATCH: 0
 - DELETE: 0
@@ -178,15 +182,15 @@ None.
 - Opportunity business writes: 0
 - Production requests: 0
 
-All 25 requests completed as read-only GET operations. The count includes the single delayed three-request permission cross-check; no retry loop was used.
+All 22 requests completed as read-only GET operations. Both permission paths agreed on the first read, so no delayed repeat was used.
 
 ## Final Gate
 
 - `Non-admin Demo Test User Ready=true`
-- `BPF Demo User Permission Ready=false`
+- `BPF Demo User Permission Ready=true`
 - `App Access Ready=true`
 - `Full Replica Access Ready=true`
-- `BPF Process Order Change Ready=false`
+- `BPF Process Order Change Ready=true`
 - `BPF Runtime Test Ready=false`
 
-Do not change process order or start BPF runtime testing. Manually verify that the Opportunity Write, Append, and Append To Organization-level selections were saved on `CRM AI Demo BPF User`, then run a fresh read-only effective-permission verification.
+The permission prerequisite for a separately authorized Process Order phase is complete. This verification does not authorize or perform the order change, and `BPF Runtime Test Ready` remains false until that later phase succeeds.
