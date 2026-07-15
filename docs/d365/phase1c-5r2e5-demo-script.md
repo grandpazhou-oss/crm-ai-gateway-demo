@@ -120,4 +120,17 @@ The demo now has two distinct records:
 - Opportunity 1: budget-outside, one Actual, four populated Revenue/GP months.
 - Opportunity 2: budget-inside, 12 populated Revenue/GP budget months, no Actual.
 
-For final evidence, capture one ordinary-user screenshot of Opportunity 2's Budget tab showing the budget-inside status, representative monthly values, and annual totals. This is recommended P2 evidence; no further data or configuration change is required.
+Final ordinary-user screenshots now confirm Opportunity 2's Budget tab, budget-inside status, representative monthly values, populated Sales Person 1 and Contact 1, and annual totals. The GET-only read-back confirms the complete April-March sequence. No further data or configuration change is required.
+
+## Budget Scenario Runtime Acceptance
+
+- Runtime user: `CRM AI Demo User`
+- App/Form: Modern App / Full Replica
+- Budget status: `01: 预算内`
+- Monthly Revenue/GP: `50,000/5,000` for April-March
+- Annual Revenue/GP: `600,000/60,000`
+- Actual count: `0`
+- Permission/component errors: none
+- Runtime writes: `0`
+- Final P0/P1/P2: `0/0/1`
+- `R2E Demo Ready=true`

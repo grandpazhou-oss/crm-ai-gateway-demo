@@ -288,7 +288,39 @@ Prefix audit GET=4
 Production requests=0
 ```
 
-Final-business-completeness issues: P0=`0`, P1=`0`, P2=`2` (annual actual GP remains derived; a new ordinary-user screenshot of Opportunity 2's Budget tab is recommended evidence but is not a server-side data gate).
+Final-business-completeness issues: P0=`0`, P1=`0`, P2=`1` (annual actual GP remains derived).
+
+## Ordinary User Budget Scenario Final Acceptance
+
+Two user-provided screenshots from `CRM AI Demo User`, retained outside Git, complete the runtime evidence:
+
+- Screenshot 1 shows `CRM AI Gateway Demo - Modern`, the `[AI-DEMO-R2E5] Pipeline Comparison Scenario`, Full Replica's Budget tab, budget-inside status, and April-December Revenue/GP values of `50,000/5,000`. Budget volume is visibly empty.
+- Screenshot 2 shows the same Full Replica record, Contact 1, Sales Person 1, `01: 预算内`, annual Revenue `600,000`, and annual GP `60,000`, without a permission or component error.
+
+The screenshot viewport does not expose January-March simultaneously; the final GET-only Dataverse read-back independently confirms all 12 Revenue values are `50,000` and all 12 GP values are `5,000`. It also confirms Contact 1, Sales Person 1, budget-inside status, annual totals, and Actual count `0`.
+
+Final post-acceptance evidence:
+
+```text
+Scenario read-back: GET=10, POST/PATCH/DELETE/Publish=0
+Protection read-back: GET=15, POST/PATCH/DELETE/Publish=0
+Prefix/count audit: GET=4, POST/PATCH/DELETE/Publish=0
+Business writes=0
+Production requests=0
+```
+
+Opportunity 1 and its Actual remain unchanged. Prefix counts remain Account/Opportunity/Actual=`1/2/1`; Activity/Note delta remains `0/0`; Protected Form hash, BPF definition/instance, Full Replica `5/19/115/106`, Plugin `7/0`, Location, and POL/POD remain unchanged.
+
+### Final Runtime Gates
+
+| Gate | Result |
+|---|---|
+| Ordinary User Demo Runtime Ready | true |
+| Budget Scenario Runtime Ready | true |
+| Demo Data Integrity Ready | true |
+| Production Isolation Ready | true |
+| P0/P1 | `0/0` |
+| R2E Demo Ready | true |
 
 ## Blocking Contract Conflict
 
