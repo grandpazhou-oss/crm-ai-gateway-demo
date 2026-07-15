@@ -229,6 +229,67 @@ Final issue count: P0=`0`, P1=`0`, P2=`1` (annual GP remains an explicit derived
 | P0/P1 | `0/0` |
 | R2E Demo Ready | true |
 
+## Final Business Completeness
+
+The final dataset now separates two complementary scenarios without adding records:
+
+1. Opportunity 1 remains the budget-outside actuals scenario.
+2. Opportunity 2 is the budget-inside budget scenario.
+
+### Opportunity 2 Field Mapping
+
+| Meaning | Logical name | Metadata result |
+|---|---|---|
+| Budget status | `aigw_budgetstatus` | Boolean, writable |
+| Sales Person 1 | `aigw_sales` | String, writable |
+| Contact 1 | `parentcontactid` | Contact lookup, writable |
+| April-March Revenue budget | `aigw_m4revenuebudget` through `aigw_m3revenuebudget` | Money, writable, `SourceType=0` |
+| April-March GP budget | `aigw_m4gpmpbudget` through `aigw_m3gpmpbudget` | Money, writable, `SourceType=0` |
+| April-March volume budget | `aigw_m4volumebudget` through `aigw_m3volumebudget` | Decimal, optional, left empty |
+| Annual Revenue budget | `aigw_yearrevenuebudget` | Decimal, writable, `SourceType=0` |
+| Annual GP budget | `aigw_yeargpmpbudget` | Decimal, writable, `SourceType=0` |
+
+The annual fields are ordinary fields rather than calculated or rollup fields. Their values were explicitly written as the arithmetic sums of the 12 monthly values. April Revenue is Metadata `Recommended`; it is not Business Required and was populated as part of the complete scenario. No Required Level or Business Rule was changed.
+
+### Opportunity 2 Budget Values
+
+| Fiscal month order | Revenue budget | GP budget | Margin | Volume |
+|---|---:|---:|---:|---|
+| April | 50,000 | 5,000 | 10% | empty |
+| May | 50,000 | 5,000 | 10% | empty |
+| June | 50,000 | 5,000 | 10% | empty |
+| July | 50,000 | 5,000 | 10% | empty |
+| August | 50,000 | 5,000 | 10% | empty |
+| September | 50,000 | 5,000 | 10% | empty |
+| October | 50,000 | 5,000 | 10% | empty |
+| November | 50,000 | 5,000 | 10% | empty |
+| December | 50,000 | 5,000 | 10% | empty |
+| January | 50,000 | 5,000 | 10% | empty |
+| February | 50,000 | 5,000 | 10% | empty |
+| March | 50,000 | 5,000 | 10% | empty |
+| **Annual** | **600,000** | **60,000** | **10%** | **empty** |
+
+Sales Person 1 is `[AI-DEMO-R2E5] Demo Sales Owner`; Contact 1 reuses synthetic Contact `8739f69c-4b80-f111-ab0e-000d3a82d194`. Sales Person 2-4 remain empty and optional. Opportunity 2 remains without an Actual record.
+
+### Final Integrity Read-Back
+
+- Opportunity 1 and its Actual have unchanged timestamps and values.
+- Opportunity 1 Actual count=`1`; Opportunity 2 Actual count=`0`.
+- Prefix counts remain Account/Opportunity/Actual=`1/2/1`; no Account, Opportunity, Actual, or Contact was created.
+- Opportunity 2 Activity/Note delta=`0/0`.
+- Protected Form, BPF, Full Replica, Plugin, Location, POL/POD, and master data were not modified.
+- Cleanup IDs and deletion order are unchanged; the ignored manifest now records the two scenario purposes.
+
+```text
+Dry-run GET=10, writes=0
+Apply GET=17, PATCH=1, POST=0, DELETE=0, Publish=0
+Protection GET=15
+Prefix audit GET=4
+Production requests=0
+```
+
+Final-business-completeness issues: P0=`0`, P1=`0`, P2=`2` (annual actual GP remains derived; a new ordinary-user screenshot of Opportunity 2's Budget tab is recommended evidence but is not a server-side data gate).
+
 ## Blocking Contract Conflict
 
 The requested dataset requires four Actual Management records under one Opportunity while also requiring that no duplicate rejection occur. The deployed and tested Plugin contract permits **at most one Actual Management record per Opportunity**.

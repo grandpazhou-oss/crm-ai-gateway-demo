@@ -42,6 +42,12 @@ Show April-July Revenue `100/200/300/400` and GP `10/20/30/40`. Explain that Ann
 
 Show Sales Person 1 as `[AI-DEMO-R2E5] Demo Sales Owner` and Contact 1 as `[AI-DEMO-R2E5] Synthetic Contact`. The record is budget-outside, so do not claim that monthly budget fields were completed or validated in this scenario.
 
+### 5A. Budget-Inside Comparison (60 seconds)
+
+Open `[AI-DEMO-R2E5] Pipeline Comparison Scenario` read-only. Show that it is budget-inside, uses the same synthetic Sales Person 1 and Contact 1, and has no Actual row. In the Budget tab, show April-March Revenue `50,000` and GP `5,000` per month, annual Revenue `600,000`, annual GP `60,000`, and the consistent 10% margin. Budget volume remains intentionally empty.
+
+Do not edit or save the record. The annual budget fields are explicitly stored totals, not Plugin-generated values.
+
 ### 6. Timeline (30 seconds)
 
 Show the native Timeline empty state and controls. Do not create an Activity or Note.
@@ -106,3 +112,12 @@ The initial automation-only runtime evidence gap above is retained as history. F
 - Runtime business writes: `0`
 - Final P0/P1/P2: `0/0/1`
 - `R2E Demo Ready=true`
+
+## Final Business Completeness Route
+
+The demo now has two distinct records:
+
+- Opportunity 1: budget-outside, one Actual, four populated Revenue/GP months.
+- Opportunity 2: budget-inside, 12 populated Revenue/GP budget months, no Actual.
+
+For final evidence, capture one ordinary-user screenshot of Opportunity 2's Budget tab showing the budget-inside status, representative monthly values, and annual totals. This is recommended P2 evidence; no further data or configuration change is required.
