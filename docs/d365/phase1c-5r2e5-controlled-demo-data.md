@@ -3,7 +3,7 @@
 ## Result
 
 - Environment: `org91f5f65f.crm5.dynamics.com`
-- Current status: `Corrected One-Actual server-side run complete; ordinary-user runtime verification deferred`
+- Current status: `Business completeness data correction complete; ordinary-user runtime verification remains deferred`
 - Synthetic prefix: `[AI-DEMO-R2E5]`
 - Created Account / Opportunity / Actual: `1 / 2 / 1`
 - Production requests: `0`
@@ -21,6 +21,7 @@ The original blocked result is preserved below. A separately authorized correcte
 | Opportunity | `[AI-DEMO-R2E5] Monthly Actuals Scenario` | `4d1cfb52-2c80-f111-ab0e-000d3a82d194` |
 | Opportunity | `[AI-DEMO-R2E5] Pipeline Comparison Scenario` | `cf1cfb52-2c80-f111-ab0e-000d3a82d194` |
 | Actual Management | `[AI-DEMO-R2E5] Four-Month Actual` | `f91cfb52-2c80-f111-ab0e-000d3a82d194` |
+| Contact | `[AI-DEMO-R2E5] Synthetic Contact` | `8739f69c-4b80-f111-ab0e-000d3a82d194` |
 
 All names use the approved prefix. The values, descriptions, dates, and amounts are synthetic. No production GUID was imported.
 
@@ -104,6 +105,82 @@ The first Apply attempt failed at the local test-environment classification gate
 | R2E Demo Ready | false |
 
 Corrected-run issue count: P0=`0`, P1=`1` (ordinary-user browser evidence unavailable), P2=`0`.
+
+## Business Completeness Correction
+
+### Verified Field Contract
+
+| Business meaning | Logical name | Type | Metadata required | Form required | Result |
+|---|---|---|---|---|---|
+| April-July actual GP | `aigw_aprilactualgp`, `aigw_mayactualgp`, `aigw_juneactualgp`, `aigw_julyactualgp` | Money | None | Optional | Updated on the existing Actual |
+| Annual actual Revenue | `aigw_annualactualrevenue` | Money | None | Read-only control | Plugin-managed, remains 1,000 |
+| Annual actual GP | none | Not present | N/A | N/A | Derived for demo only; no Dataverse field exists |
+| Sales Person 1 | `aigw_sales` | String | None | Optional | Set to `[AI-DEMO-R2E5] Demo Sales Owner` |
+| Sales Person 2-4 | `aigw_salesperson2`, `aigw_salesperson3`, `aigw_salesperson4` | String | None | Optional | Remain empty |
+| Customer Contact 1 | `parentcontactid` | Lookup to Contact | None | Optional | Bound to the synthetic Contact |
+| Customer Contact 2-5 | `aigw_customercontact2` through `aigw_customercontact5` | String | None | Optional | Remain empty |
+| Budget classification | `aigw_budgetstatus` | Boolean | None | Optional | `false` / 预算外 |
+| April-March budget Revenue | `aigw_m4revenuebudget` through `aigw_m3revenuebudget` | Money | None | Optional | Not applicable; no writes |
+| April-March budget GP | `aigw_m4gpmpbudget` through `aigw_m3gpmpbudget` | Money | None | Optional | Not applicable; no writes |
+| April-March budget volume | `aigw_m4volumebudget` through `aigw_m3volumebudget` | Decimal | None | Optional | Optional; no writes |
+| Annual budget Revenue / GP | `aigw_yearrevenuebudget`, `aigw_yeargpmpbudget` | Decimal | None | Optional | Not applicable; no writes |
+
+The deployed Plugin reads only the 12 monthly Revenue fields, writes `aigw_annualactualrevenue`, and synchronizes `opportunity.aigw_yearrevenueactual`. Monthly GP/MP and annual GP/MP are outside its write contract. The annual GP value below is therefore a transparent report calculation, not a persisted or implied Plugin result.
+
+### Data Correction Result
+
+| Measure | April | May | June | July | Annual/derived |
+|---|---:|---:|---:|---:|---:|
+| Actual Revenue | 100 | 200 | 300 | 400 | 1,000 (stored Plugin total) |
+| Actual GP | 10 | 20 | 30 | 40 | 100 (derived) |
+| GP margin | 10% | 10% | 10% | 10% | 10% (derived) |
+
+- Actual count remains `1` for the primary Opportunity and `0` for the comparison Opportunity.
+- Parent annual Revenue remains `1,000`; no deprecated CNY field was written.
+- The primary Opportunity is explicitly budget-outside, so monthly and annual budget writes were correctly skipped.
+- Sales Person 1 and Contact 1 now have synthetic values; Sales Person 2-4 remain empty.
+- Contact `8739f69c-4b80-f111-ab0e-000d3a82d194` is related only to the synthetic Account.
+- Activity/Note delta is `0/0`; the protected baseline Opportunity has zero field changes.
+
+### Required Rule Matrix
+
+| Rule | Target behavior | Implemented now | Reason |
+|---|---|---|---|
+| Sales Person 1 | Required | No | Current column and form are optional; a global change could block unrelated existing records |
+| Sales Person 2-4 | Optional | Already optional | Matches requested rule |
+| Customer Contact 1 | Required | No | Current lookup and form are optional; requires a separately reviewed form/data-readiness change |
+| Actual GP when corresponding Revenue > 0 | Conditional required; margin 5%-15% | No | Requires conditional validation, not a static Required Level |
+| Budget Revenue/GP for budget-inside projects | Conditional required for all 12 months | No | Requires a Business Rule or equivalent conditional validation and regression review |
+| Budget volume | Optional | Already optional | Matches requested rule |
+| Calculated, summary, base, hidden, deprecated fields | Never required | Unchanged | Protected from accidental configuration |
+
+No Form, Metadata, Business Rule, Plugin, or publication change was made. These conditional requirements require a separately authorized configuration phase with an existing-record impact audit and ordinary-user save-flow regression test.
+
+### Updated Cleanup Manifest
+
+Delete only under separate cleanup authorization, in this order:
+
+1. Actual Management `f91cfb52-2c80-f111-ab0e-000d3a82d194`
+2. Opportunities `4d1cfb52-2c80-f111-ab0e-000d3a82d194`, `cf1cfb52-2c80-f111-ab0e-000d3a82d194`
+3. Contact `8739f69c-4b80-f111-ab0e-000d3a82d194`
+4. Account `bc1bfb52-2c80-f111-ab0e-000d3a82d194`
+
+Location and POL/POD remain excluded.
+
+### Correction Requests And Protection
+
+```text
+Read-only mapping: GET=12
+Correction run: GET=20, POST=1, PATCH=2, DELETE=0, Publish=0
+Protection read-back: GET=15
+Business writes: Contact create=1, Actual update=1, Opportunity update=1
+Budget writes=0
+Production requests=0
+```
+
+Protection read-back: Protected Form hash unchanged; Full Replica `5/19/115/106`; Timeline `1/0`; Plugin `1/3/7/0`; protected BPF instance remains unique at `案件关闭`; Location and master data unchanged.
+
+Correction issue count: P0=`0`, P1=`1` (ordinary-user read-only runtime evidence remains deferred), P2=`1` (annual GP is derived because no annual GP field exists).
 
 ## Blocking Contract Conflict
 

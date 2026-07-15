@@ -38,6 +38,10 @@ Open the Actual Management subgrid. Under the approved one-Actual option, open t
 
 Do not claim that four child rows are supported. The current Plugin permits one Actual per Opportunity.
 
+Show April-July Revenue `100/200/300/400` and GP `10/20/30/40`. Explain that Annual Actual Revenue `1,000` and the parent Revenue `1,000` are Plugin-managed, while annual GP `100` and margin `10%` are transparent demo calculations because the current data model has no annual actual GP field.
+
+Show Sales Person 1 as `[AI-DEMO-R2E5] Demo Sales Owner` and Contact 1 as `[AI-DEMO-R2E5] Synthetic Contact`. The record is budget-outside, so do not claim that monthly budget fields were completed or validated in this scenario.
+
 ### 6. Timeline (30 seconds)
 
 Show the native Timeline empty state and controls. Do not create an Activity or Note.
@@ -83,3 +87,11 @@ Return to the Opportunity summary without saving. Confirm that the demonstration
 ## Corrected One-Actual Run
 
 The route must show one Actual row containing April-July Revenue `100/200/300/400`, generated Annual Actual Revenue `1,000`, and parent annual Revenue `1,000`. The comparison Opportunity must show no Actual row. Runtime acceptance remains pending because the browser-control connection could not capture a verifiable ordinary-user session; do not substitute an administrator session.
+
+## Business Completeness Presenter Notes
+
+- Sales Person 1 and Contact 1 are populated with synthetic demo values; fields 2-4 remain optional.
+- The record is explicitly 预算外. Do not navigate to or describe budget months as completed data.
+- Actual GP values are `10/20/30/40`; compute `100 / 1,000 = 10%` aloud if useful.
+- Do not describe annual GP as a Plugin field or persisted total.
+- Required/conditional-required behavior is a documented follow-up configuration, not part of this demo run.
