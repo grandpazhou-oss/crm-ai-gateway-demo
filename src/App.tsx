@@ -7,6 +7,8 @@ import { ManagementMeetingCopilot } from "./components/ai-actions/ManagementMeet
 import { NextBestActionBoard } from "./components/ai-actions/NextBestActionBoard";
 import { Opportunity360Brief } from "./components/ai-actions/Opportunity360Brief";
 import { RiskSummary } from "./components/ai-actions/RiskSummary";
+import { DecisionContextBar, DecisionPageHeader, ProviderSafetyStrip, UnifiedDecisionCard } from "./decision/DecisionUi";
+import { adaptActionBoardItem, adaptLegacyActionResult, adaptRiskCase, placeholderOutput } from "./decision/contract";
 import { languages, useI18n, type Language, type TFunction } from "./i18n";
 import type { ActionBoardAction, AiActionName, AiActionResult, AiDemoChatResult, AiProviderStatus, AiResult, AuditEntry, DashboardFilters, DynamicsStatus, ManagementDashboard, Opportunity, RiskRadarCase, Role, TransformResult } from "./types";
 
@@ -29,7 +31,7 @@ const exampleQuestions = [
 
 export default function App() {
   const { language, setLanguage, t } = useI18n();
-  const [page, setPage] = useState<"cockpit" | "risk" | "actionBoard" | "opportunities" | "detail" | "actions" | "gateway">("cockpit");
+  const [page, setPage] = useState<"cockpit" | "risk" | "actionBoard" | "opportunities" | "detail" | "actions" | "meeting" | "portfolio" | "gateway">("cockpit");
   const [dashboard, setDashboard] = useState<ManagementDashboard | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>({});
   const [managementSummary, setManagementSummary] = useState<AiResult | null>(null);
@@ -380,22 +382,31 @@ export default function App() {
   return (
     <main className="app">
       <header className="topbar">
-        <div>
+        <div className="gateway-brand">
           <p>{t("app.subtitle")}</p>
           <h1>{t("app.title")}</h1>
         </div>
         <nav className="tabs">
-          <button className={page === "cockpit" ? "active" : ""} onClick={() => setPage("cockpit")}>{t("nav.managementCockpit")}</button>
-          <button className={page === "risk" ? "active" : ""} onClick={() => setPage("risk")}>{t("nav.riskRadar")}</button>
-          <button className={page === "actionBoard" ? "active" : ""} onClick={() => setPage("actionBoard")}>{t("nav.actionBoard")}</button>
-          <button className={page === "opportunities" ? "active" : ""} onClick={() => setPage("opportunities")}>{t("nav.opportunities")}</button>
-          <button className={page === "detail" ? "active" : ""} disabled={!selected} onClick={() => setPage("detail")}>{t("nav.dealBrief")}</button>
-          <button className={page === "gateway" ? "active" : ""} onClick={() => setPage("gateway")}>{t("nav.safetyGateway")}</button>
-          <button className={`legacy-tab ${page === "actions" ? "active" : ""}`} onClick={() => setPage("actions")}>{t("nav.aiLab")}</button>
+          <button className={page === "cockpit" ? "active" : ""} onClick={() => setPage("cockpit")}>AI Cockpit</button>
+          <button className={page === "risk" ? "active" : ""} onClick={() => setPage("risk")}>Risk &amp; Priority</button>
+          <button className={page === "detail" ? "active" : ""} disabled={!selected} onClick={() => setPage("detail")}>Opportunity 360</button>
+          <button className={page === "actionBoard" ? "active" : ""} onClick={() => setPage("actionBoard")}>Action Board</button>
+          <button className={page === "meeting" ? "active" : ""} onClick={() => setPage("meeting")}>Meeting Copilot</button>
+          <button className={page === "portfolio" ? "active" : ""} onClick={() => setPage("portfolio")}>Portfolio Intelligence</button>
+          <button className={page === "gateway" ? "active" : ""} onClick={() => setPage("gateway")}>Audit &amp; Safety</button>
         </nav>
-        <LanguageSwitcher language={language} onChange={setLanguage} t={t} />
-        <span className={transform?.blocked ? "status danger" : "status"}>{status}</span>
+        <div className="topbar-utility">
+          <LanguageSwitcher language={language} onChange={setLanguage} t={t} />
+          <span className={transform?.blocked ? "status danger" : "status"}>{status}</span>
+        </div>
       </header>
+      <ProviderSafetyStrip status={providerStatus} />
+      <DecisionContextBar
+        opportunityId={selectedId}
+        opportunities={filteredOpportunities.map((item) => ({ id: item.id, customer_code: item.customer_code }))}
+        onOpportunityChange={changeOpportunity}
+        status={status}
+      />
 
       {page === "cockpit" ? (
         <ManagementCockpit
@@ -411,9 +422,9 @@ export default function App() {
           t={t}
         />
       ) : page === "risk" ? (
-        <RiskRadarPage dashboard={dashboard} t={t} />
+        <RiskRadarPage dashboard={dashboard} providerStatus={providerStatus} t={t} />
       ) : page === "actionBoard" ? (
-        <ActionBoardPage dashboard={dashboard} t={t} />
+        <ActionBoardPage dashboard={dashboard} providerStatus={providerStatus} t={t} />
       ) : page === "opportunities" ? (
         <OpportunityListPage
           dashboard={dashboard}
@@ -431,7 +442,7 @@ export default function App() {
           dashboard={dashboard}
           externalAiLoading={externalAiLoading}
           externalAiResult={externalAiResult}
-          onBack={() => setPage("opportunities")}
+          onBack={() => setPage("cockpit")}
           onExternalAiRiskAnalysis={runExternalAiRiskAnalysis}
           onRunAction={runSalesAction}
           opportunity={selected}
@@ -440,6 +451,10 @@ export default function App() {
           transform={transform}
           t={t}
         />
+      ) : page === "meeting" ? (
+        <MeetingCopilotShell actionLoading={actionLoading} actionResults={actionResults} onRunAction={runSalesAction} providerStatus={providerStatus} />
+      ) : page === "portfolio" ? (
+        <PortfolioIntelligenceShell actionLoading={actionLoading} actionResults={actionResults} onRunAction={runSalesAction} providerStatus={providerStatus} />
       ) : page === "actions" ? (
         <AiSalesActions
           actionCustomerToken={actionCustomerToken}
@@ -476,7 +491,7 @@ export default function App() {
   );
 }
 
-function RiskRadarPage({ dashboard, t }: { dashboard: ManagementDashboard | null; t: TFunction }) {
+function RiskRadarPage({ dashboard, providerStatus, t }: { dashboard: ManagementDashboard | null; providerStatus: AiProviderStatus | null; t: TFunction }) {
   const riskRadar = dashboard?.riskRadar;
   const [selectedCell, setSelectedCell] = useState<{ stage: string; riskLevel: "high" | "medium" | "low" } | null>(null);
   const [selectedCaseToken, setSelectedCaseToken] = useState("");
@@ -511,6 +526,8 @@ function RiskRadarPage({ dashboard, t }: { dashboard: ManagementDashboard | null
         </div>
         <SafetyNotice t={t} />
       </section>
+
+      <UnifiedDecisionCard output={selectedCase ? adaptRiskCase(selectedCase, providerStatus) : placeholderOutput("Risk decision", providerStatus)} />
 
       <Panel title={t("riskRadar.driverSummary")}>
         <div className="risk-driver-summary">
@@ -626,7 +643,7 @@ function RiskEvidencePanel({ riskCase, t }: { riskCase: RiskRadarCase | null; t:
 
 type ActionFilter = { kind: "all" | "owner" | "type" | "rank"; value: string };
 
-function ActionBoardPage({ dashboard, t }: { dashboard: ManagementDashboard | null; t: TFunction }) {
+function ActionBoardPage({ dashboard, providerStatus, t }: { dashboard: ManagementDashboard | null; providerStatus: AiProviderStatus | null; t: TFunction }) {
   const actionBoard = dashboard?.actionBoard;
   const [filter, setFilter] = useState<ActionFilter>({ kind: "all", value: "" });
   const [selectedActionId, setSelectedActionId] = useState("");
@@ -660,6 +677,8 @@ function ActionBoardPage({ dashboard, t }: { dashboard: ManagementDashboard | nu
       </section>
 
       <ActionSummary summary={actionBoard.summary} t={t} />
+
+      <UnifiedDecisionCard output={selectedAction ? adaptActionBoardItem(selectedAction, providerStatus) : placeholderOutput("Priority action", providerStatus)} />
 
       <section className="action-board-grid">
         <Panel title={t("actionBoard.ownerBoard")}>
@@ -902,6 +921,13 @@ function ManagementCockpit({
       />
 
       <AiExecutiveSummary dashboard={dashboard} attentionItems={attentionItems} selected={selectedAttention} t={t} />
+
+      <UnifiedDecisionCard
+        compact
+        output={dashboard.riskRadar?.topRiskCases[0]
+          ? adaptRiskCase(dashboard.riskRadar.topRiskCases[0], providerStatus)
+          : placeholderOutput("Portfolio decision", providerStatus)}
+      />
 
       <section className="command-center-grid">
         <Panel title={t("cockpit.attentionQueue")}>
@@ -1291,6 +1317,7 @@ function OpportunityDetailPage({
   if (!opportunity) return <section className="opportunity-page"><EmptyState label={t("empty.noOpportunitySelected")} /></section>;
   const recentAudit = auditLog.filter((entry) => entry.opportunity_id === opportunity.id || entry.functionName?.includes("summary") || entry.safe_context_enabled).slice(0, 8);
   const insight = dashboard?.aiInsightsByOpportunity?.[opportunity.id];
+  const decisionCase = dashboard?.riskRadar?.riskCases.find((item) => item.opportunityToken === opportunity.id) || null;
   const externalAiEnabled = providerStatus?.provider === "openai-compatible" && providerStatus?.externalAiEnabled === true;
   const safeContextReady = Boolean(transform?.safePayload && !transform.blocked);
   const externalDisabledReason = externalAiEnabled ? t("dealBrief.safeContextNotReady") : t("dealBrief.externalAiDisabled");
@@ -1311,6 +1338,7 @@ function OpportunityDetailPage({
       </section>
 
       <SafetyNotice t={t} />
+      <UnifiedDecisionCard output={decisionCase ? adaptRiskCase(decisionCase, providerStatus) : placeholderOutput("Opportunity decision", providerStatus)} />
 
       <section className="record-header">
         <div><span>Customer</span><strong>{opportunity.customer_code}</strong></div>
@@ -1559,6 +1587,68 @@ function badgeTone(badge: string) {
   if (["High Risk", "Overdue"].includes(badge)) return "danger";
   if (["Executive Attention", "Cost Pressure", "Decision Maker Unclear", "Low Win Probability"].includes(badge)) return "warning";
   return "info";
+}
+
+function MeetingCopilotShell({
+  actionLoading,
+  actionResults,
+  onRunAction,
+  providerStatus,
+}: {
+  actionLoading: AiActionName | null;
+  actionResults: Partial<Record<AiActionName, AiActionResult>>;
+  onRunAction: (actionName: AiActionName) => void;
+  providerStatus: AiProviderStatus | null;
+}) {
+  const result = actionResults["meeting-copilot"];
+  const output = adaptLegacyActionResult("meeting-copilot", result, providerStatus) || placeholderOutput("Meeting preparation", providerStatus);
+  return (
+    <section className="decision-shell-page">
+      <DecisionPageHeader title="Meeting Copilot" description="Prepare a safe pre-meeting brief, questions, and negotiation focus without creating CRM activities." />
+      <div className="decision-shell-toolbar">
+        <span>Safe context only · Read-only draft · No email or activity creation</span>
+        <button disabled={Boolean(actionLoading)} onClick={() => onRunAction("meeting-copilot")}>{actionLoading === "meeting-copilot" ? "Generating..." : "Generate pre-meeting brief"}</button>
+      </div>
+      <UnifiedDecisionCard output={output} />
+      <Panel title="Pre-meeting workspace">
+        {result?.blocked ? <p className="danger-text">{result.error}</p> : <ManagementMeetingCopilot result={result?.result} />}
+      </Panel>
+    </section>
+  );
+}
+
+function PortfolioIntelligenceShell({
+  actionLoading,
+  actionResults,
+  onRunAction,
+  providerStatus,
+}: {
+  actionLoading: AiActionName | null;
+  actionResults: Partial<Record<AiActionName, AiActionResult>>;
+  onRunAction: (actionName: AiActionName) => void;
+  providerStatus: AiProviderStatus | null;
+}) {
+  const [mode, setMode] = useState<"growth" | "doctor">("growth");
+  const actionName: AiActionName = mode === "growth" ? "customer-growth" : "data-doctor";
+  const result = actionResults[actionName];
+  const output = adaptLegacyActionResult(actionName, result, providerStatus) || placeholderOutput(mode === "growth" ? "Growth Finder" : "Data Doctor", providerStatus);
+  return (
+    <section className="decision-shell-page">
+      <DecisionPageHeader title="Portfolio Intelligence" description="Combine growth discovery and data quality review in one management workflow." />
+      <div className="decision-segmented" role="tablist" aria-label="Portfolio intelligence mode">
+        <button className={mode === "growth" ? "active" : ""} onClick={() => setMode("growth")}>Growth Finder</button>
+        <button className={mode === "doctor" ? "active" : ""} onClick={() => setMode("doctor")}>Data Doctor</button>
+      </div>
+      <div className="decision-shell-toolbar">
+        <span>Portfolio aggregates and tokenized context only · No CRM write-back</span>
+        <button disabled={Boolean(actionLoading)} onClick={() => onRunAction(actionName)}>{actionLoading === actionName ? "Generating..." : `Generate ${mode === "growth" ? "growth findings" : "data findings"}`}</button>
+      </div>
+      <UnifiedDecisionCard output={output} />
+      <Panel title={mode === "growth" ? "Growth Finder" : "Data Doctor"}>
+        {result?.blocked ? <p className="danger-text">{result.error}</p> : mode === "growth" ? <CustomerGrowthAgent result={result?.result} /> : <CrmDataDoctor result={result?.result} />}
+      </Panel>
+    </section>
+  );
 }
 
 function AiSalesActions({

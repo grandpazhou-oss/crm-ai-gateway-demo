@@ -159,6 +159,7 @@ export function createApp({
         configured: status.configured,
         safeContextOnly: true,
         rawDataSent: false,
+        fallbackReason: status.fallbackReason || "",
       },
     });
   });

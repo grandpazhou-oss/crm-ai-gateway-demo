@@ -797,17 +797,16 @@ test("risk radar page is available without replacing formal app or design previe
   assert.equal(appSource.includes('page === "risk"'), true);
 });
 
-test("main navigation keeps action-first demo path and downgrades legacy AI lab", async () => {
+test("main navigation follows the decision workflow and keeps legacy AI lab off the primary path", async () => {
   const appSource = await readFile(path.resolve("src/App.tsx"), "utf8");
   const mainSource = await readFile(mainTsxFile, "utf8");
   assert.equal(mainSource.includes('window.location.pathname === "/design-preview"'), true);
   const navSource = appSource.slice(appSource.indexOf('<nav className="tabs">'), appSource.indexOf("</nav>"));
-  const navOrder = ["nav.managementCockpit", "nav.riskRadar", "nav.actionBoard", "nav.opportunities", "nav.dealBrief", "nav.safetyGateway"];
+  const navOrder = ["AI Cockpit", "Risk &amp; Priority", "Opportunity 360", "Action Board", "Meeting Copilot", "Portfolio Intelligence", "Audit &amp; Safety"];
   for (let index = 0; index < navOrder.length - 1; index += 1) {
     assert.equal(navSource.indexOf(navOrder[index]) < navSource.indexOf(navOrder[index + 1]), true, `${navOrder[index]} before ${navOrder[index + 1]}`);
   }
   for (const keyOrLabel of [
-    "nav.actionBoard",
     "actionBoard.summary",
     "actionBoard.ownerBoard",
     "actionBoard.actionTypeGroups",
@@ -823,6 +822,7 @@ test("main navigation keeps action-first demo path and downgrades legacy AI lab"
   assert.equal(appSource.includes('page === "actionBoard"'), true);
   assert.equal(appSource.includes(">AI Sales Actions<"), false);
   assert.equal(appSource.includes('t("nav.aiLab")'), true);
+  assert.equal(navSource.includes('t("nav.aiLab")'), false);
   assert.equal(appSource.includes("common.safeContextOnly"), true);
   assert.equal(appSource.includes("common.rawCrmDataNotSent"), true);
   assert.equal(appSource.includes("common.noCrmWriteBack"), true);

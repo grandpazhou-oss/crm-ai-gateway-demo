@@ -273,6 +273,7 @@ export type AiProviderStatus = {
   configured: boolean;
   safeContextOnly: boolean;
   rawDataSent: boolean;
+  fallbackReason?: string;
 };
 
 export type AiActionName = "opportunity-brief" | "next-best-actions" | "risk-summary" | "data-doctor" | "meeting-copilot" | "customer-growth" | "draft-pack";
