@@ -3,11 +3,11 @@
 ## Result
 
 - Environment: `org91f5f65f.crm5.dynamics.com`
-- Current status: `Business completeness data correction complete; ordinary-user runtime verification remains deferred`
+- Current status: `Ordinary-user read-only demo acceptance complete`
 - Synthetic prefix: `[AI-DEMO-R2E5]`
 - Created Account / Opportunity / Actual: `1 / 2 / 1`
 - Production requests: `0`
-- `R2E Demo Ready=false`
+- `R2E Demo Ready=true`
 
 The original blocked result is preserved below. A separately authorized corrected run subsequently used the One-Actual option.
 
@@ -181,6 +181,53 @@ Production requests=0
 Protection read-back: Protected Form hash unchanged; Full Replica `5/19/115/106`; Timeline `1/0`; Plugin `1/3/7/0`; protected BPF instance remains unique at `案件关闭`; Location and master data unchanged.
 
 Correction issue count: P0=`0`, P1=`1` (ordinary-user read-only runtime evidence remains deferred), P2=`1` (annual GP is derived because no annual GP field exists).
+
+## Ordinary User Read-Only Demo Acceptance
+
+The user-provided `CRM AI Demo User` runtime evidence confirms that the primary synthetic Opportunity opens in Full Replica and renders Sales Person 1, Contact 1, Location, all POL/POD lookups, the single Actual row, Timeline, and BPF without a permission or loading error. No administrator session was used as acceptance evidence.
+
+Runtime observations:
+
+- Opportunity 1 routes to Full Replica and shows the populated synthetic Sales Person 1 and Contact 1.
+- Budget status is 预算外; budget month completion is not applicable to this record.
+- Actual subgrid count is `1`; Opportunity 2 Actual count is `0`.
+- April-July Revenue is `100/200/300/400`; April-July GP is `10/20/30/40`.
+- Annual Actual Revenue and parent annual Revenue are both `1,000`.
+- Derived annual GP is `100`, with a derived margin of `10%`; no annual GP schema field was added.
+- Timeline contains no Activity or Note.
+- BPF, Location, and POL/POD render without permission, target, or component errors.
+
+An independent post-acceptance server read-back used GET requests only and confirmed all five fixed IDs, their relationships, the one-Actual cardinality, values, and unchanged timestamps. It also confirmed:
+
+```text
+GET=16
+POST=0
+PATCH=0
+DELETE=0
+Publish=0
+Business writes=0
+Production requests=0
+```
+
+Protected Form hash remains `5519ce235d63873d934fc5dbd4b9fdb703e9a62e692d2c38e03396f7688030b7`; Full Replica remains `5/19/115/106` with Timeline `1/0`; the BPF definition hash and process order remain unchanged; Plugin remains `1 Assembly / 3 Types / 7 enabled / 0 disabled`.
+
+Final issue count: P0=`0`, P1=`0`, P2=`1` (annual GP remains an explicit derived calculation).
+
+### Final Gates
+
+| Gate | Result |
+|---|---|
+| Ordinary User Demo Runtime Ready | true |
+| Synthetic Data Only | true |
+| Demo Relationships Valid | true |
+| One Actual Per Opportunity Ready | true |
+| Four Month Revenue And GP Ready | true |
+| Actual Totals Plugin Ready | true |
+| Baseline Opportunity Preserved | true |
+| Cleanup Manifest Ready | true |
+| Production Isolation Ready | true |
+| P0/P1 | `0/0` |
+| R2E Demo Ready | true |
 
 ## Blocking Contract Conflict
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-This 5-8 minute route now has a server-verified One-Actual dataset. It remains **runtime-verification pending** until `CRM AI Demo User` completes the read-only route without a P0/P1 error.
+This 5-8 minute route has a server-verified One-Actual dataset and completed `CRM AI Demo User` read-only acceptance.
 
 ## Preconditions
 
@@ -81,12 +81,14 @@ Return to the Opportunity summary without saving. Confirm that the demonstration
 
 - Script structure ready: `true`
 - Controlled dataset ready: `true`
-- Ordinary-user runtime acceptance ready: `false`
-- `R2E Demo Ready=false`
+- Ordinary-user runtime acceptance ready: `true`
+- `R2E Demo Ready=true`
 
 ## Corrected One-Actual Run
 
-The route must show one Actual row containing April-July Revenue `100/200/300/400`, generated Annual Actual Revenue `1,000`, and parent annual Revenue `1,000`. The comparison Opportunity must show no Actual row. Runtime acceptance remains pending because the browser-control connection could not capture a verifiable ordinary-user session; do not substitute an administrator session.
+The route must show one Actual row containing April-July Revenue `100/200/300/400`, generated Annual Actual Revenue `1,000`, and parent annual Revenue `1,000`. The comparison Opportunity must show no Actual row. At the time of the corrected data run, runtime acceptance was pending because browser control could not capture a verifiable ordinary-user session; an administrator session was not accepted as a substitute.
+
+The initial automation-only runtime evidence gap above is retained as history. Final acceptance used the user-provided ordinary-user evidence and an independent GET-only server read-back; no administrator runtime evidence was substituted.
 
 ## Business Completeness Presenter Notes
 
@@ -95,3 +97,12 @@ The route must show one Actual row containing April-July Revenue `100/200/300/40
 - Actual GP values are `10/20/30/40`; compute `100 / 1,000 = 10%` aloud if useful.
 - Do not describe annual GP as a Plugin field or persisted total.
 - Required/conditional-required behavior is a documented follow-up configuration, not part of this demo run.
+
+## Final Acceptance
+
+- Ordinary user: `CRM AI Demo User`
+- Full Replica, Location, POL/POD, one-row Actual subgrid, Timeline, and BPF: accepted
+- Permission or component P0/P1 errors: none
+- Runtime business writes: `0`
+- Final P0/P1/P2: `0/0/1`
+- `R2E Demo Ready=true`
