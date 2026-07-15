@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { chatWithAiDemo, getAiProviderStatus, getAuditLog, getDynamicsStatus, getManagementDashboard, getOpportunities, getSafeOpportunityContext, resetAuditLog, runAi, runAiAction, syncDynamics, testDynamicsConnection, transformOpportunity } from "./api";
+import { chatWithAiDemo, getAiProviderStatus, getAuditLog, getDecisionScenarios, getDecisionView as fetchDecisionView, getDynamicsStatus, getManagementDashboard, getOpportunities, getSafeOpportunityContext, resetAuditLog, runAi, runAiAction, syncDynamics, testDynamicsConnection, transformOpportunity } from "./api";
 import { CrmDataDoctor } from "./components/ai-actions/CrmDataDoctor";
 import { CustomerGrowthAgent } from "./components/ai-actions/CustomerGrowthAgent";
 import { DraftPack } from "./components/ai-actions/DraftPack";
@@ -8,7 +8,9 @@ import { NextBestActionBoard } from "./components/ai-actions/NextBestActionBoard
 import { Opportunity360Brief } from "./components/ai-actions/Opportunity360Brief";
 import { RiskSummary } from "./components/ai-actions/RiskSummary";
 import { DecisionContextBar, DecisionPageHeader, ProviderSafetyStrip, UnifiedDecisionCard } from "./decision/DecisionUi";
+import { DecisionWorkspace, type DecisionPage } from "./decision/DecisionWorkspace";
 import { adaptActionBoardItem, adaptLegacyActionResult, adaptRiskCase, placeholderOutput } from "./decision/contract";
+import type { DecisionMode, DecisionScenarioCatalog, DecisionView } from "./decision/types";
 import { languages, useI18n, type Language, type TFunction } from "./i18n";
 import type { ActionBoardAction, AiActionName, AiActionResult, AiDemoChatResult, AiProviderStatus, AiResult, AuditEntry, DashboardFilters, DynamicsStatus, ManagementDashboard, Opportunity, RiskRadarCase, Role, TransformResult } from "./types";
 
@@ -54,6 +56,12 @@ export default function App() {
   const [providerStatus, setProviderStatus] = useState<AiProviderStatus | null>(null);
   const [dynamicsMessage, setDynamicsMessage] = useState("");
   const [status, setStatus] = useState("Loading management cockpit...");
+  const [decisionCatalog, setDecisionCatalog] = useState<DecisionScenarioCatalog | null>(null);
+  const [decisionMode, setDecisionMode] = useState<DecisionMode>("portfolio");
+  const [decisionScenarioId, setDecisionScenarioId] = useState("multi-risk-priority");
+  const [decisionView, setDecisionView] = useState<DecisionView | null>(null);
+  const [decisionLoading, setDecisionLoading] = useState(true);
+  const [decisionError, setDecisionError] = useState("");
 
   const safeOpportunities = Array.isArray(opportunities) ? opportunities : [];
   const filteredOpportunities = useMemo(() => {
@@ -321,6 +329,44 @@ export default function App() {
     if (nextId) doTransform(role, nextId);
   }
 
+  async function loadDecisionView(mode = decisionMode, scenarioId = decisionScenarioId, opportunityToken = "") {
+    setDecisionLoading(true);
+    setDecisionError("");
+    try {
+      const result = await fetchDecisionView(mode, mode === "scenario" ? scenarioId : "", opportunityToken);
+      setDecisionView(result.data);
+      setStatus(`${mode === "portfolio" ? "Portfolio" : result.data.scenario?.title || "Scenario"} decision view ready`);
+    } catch (error) {
+      setDecisionView(null);
+      setDecisionError(error instanceof Error ? error.message : "Decision view failed");
+      setStatus("Decision view unavailable");
+    } finally {
+      setDecisionLoading(false);
+    }
+  }
+
+  function changeDecisionMode(nextMode: DecisionMode) {
+    setDecisionMode(nextMode);
+    loadDecisionView(nextMode, decisionScenarioId).catch(() => undefined);
+  }
+
+  function changeDecisionScenario(nextScenarioId: string) {
+    setDecisionMode("scenario");
+    setDecisionScenarioId(nextScenarioId);
+    loadDecisionView("scenario", nextScenarioId).catch(() => undefined);
+  }
+
+  function changeDecisionOpportunity(token: string) {
+    loadDecisionView(decisionMode, decisionScenarioId, token).catch(() => undefined);
+  }
+
+  function resetDecisionPortfolio() {
+    const defaultToken = decisionCatalog?.portfolioDefaultOpportunity || "DEMO-6C-OPP-075";
+    setDecisionMode("portfolio");
+    setDecisionScenarioId("multi-risk-priority");
+    loadDecisionView("portfolio", "", defaultToken).catch(() => undefined);
+  }
+
   async function openOpportunityDetail(nextId: string) {
     setSelectedId(nextId);
     setActionOpportunityId(nextId);
@@ -379,6 +425,20 @@ export default function App() {
       .catch(() => setStatus("Failed to load opportunities. Please check DATA_SOURCE and Dynamics connection."));
   }, []);
 
+  useEffect(() => {
+    Promise.all([getDecisionScenarios(), fetchDecisionView("portfolio")])
+      .then(([catalogResult, viewResult]) => {
+        setDecisionCatalog(catalogResult.data);
+        setDecisionView(viewResult.data);
+        setDecisionLoading(false);
+        setDecisionError("");
+      })
+      .catch((error) => {
+        setDecisionLoading(false);
+        setDecisionError(error instanceof Error ? error.message : "Decision portfolio failed to load");
+      });
+  }, []);
+
   return (
     <main className="app">
       <header className="topbar">
@@ -389,7 +449,7 @@ export default function App() {
         <nav className="tabs">
           <button className={page === "cockpit" ? "active" : ""} onClick={() => setPage("cockpit")}>AI Cockpit</button>
           <button className={page === "risk" ? "active" : ""} onClick={() => setPage("risk")}>Risk &amp; Priority</button>
-          <button className={page === "detail" ? "active" : ""} disabled={!selected} onClick={() => setPage("detail")}>Opportunity 360</button>
+          <button className={page === "detail" ? "active" : ""} onClick={() => setPage("detail")}>Opportunity 360</button>
           <button className={page === "actionBoard" ? "active" : ""} onClick={() => setPage("actionBoard")}>Action Board</button>
           <button className={page === "meeting" ? "active" : ""} onClick={() => setPage("meeting")}>Meeting Copilot</button>
           <button className={page === "portfolio" ? "active" : ""} onClick={() => setPage("portfolio")}>Portfolio Intelligence</button>
@@ -402,29 +462,19 @@ export default function App() {
       </header>
       <ProviderSafetyStrip status={providerStatus} />
       <DecisionContextBar
-        opportunityId={selectedId}
-        opportunities={filteredOpportunities.map((item) => ({ id: item.id, customer_code: item.customer_code }))}
-        onOpportunityChange={changeOpportunity}
+        catalog={decisionCatalog}
+        mode={decisionMode}
+        onModeChange={changeDecisionMode}
+        onOpportunityChange={changeDecisionOpportunity}
+        onReset={resetDecisionPortfolio}
+        onScenarioChange={changeDecisionScenario}
+        scenarioId={decisionScenarioId}
         status={status}
+        view={decisionView}
       />
 
-      {page === "cockpit" ? (
-        <ManagementCockpit
-          dashboard={dashboard}
-          dynamicsMessage={dynamicsMessage}
-          dynamicsStatus={dynamicsStatus}
-          filters={filters}
-          onClearFilters={clearFilters}
-          onRefreshDynamics={refreshFromDynamics}
-          onTestDynamics={testDynamics}
-          onUpdateFilter={updateFilter}
-          providerStatus={providerStatus}
-          t={t}
-        />
-      ) : page === "risk" ? (
-        <RiskRadarPage dashboard={dashboard} providerStatus={providerStatus} t={t} />
-      ) : page === "actionBoard" ? (
-        <ActionBoardPage dashboard={dashboard} providerStatus={providerStatus} t={t} />
+      {(["cockpit", "risk", "detail", "actionBoard", "meeting", "portfolio"] as DecisionPage[]).includes(page as DecisionPage) ? (
+        <DecisionWorkspace page={page as DecisionPage} view={decisionView} loading={decisionLoading} error={decisionError} onRetry={() => loadDecisionView()} />
       ) : page === "opportunities" ? (
         <OpportunityListPage
           dashboard={dashboard}
@@ -434,27 +484,6 @@ export default function App() {
           opportunities={filteredOpportunities}
           t={t}
         />
-      ) : page === "detail" ? (
-        <OpportunityDetailPage
-          actionLoading={actionLoading}
-          actionResults={actionResults}
-          auditLog={auditLog}
-          dashboard={dashboard}
-          externalAiLoading={externalAiLoading}
-          externalAiResult={externalAiResult}
-          onBack={() => setPage("cockpit")}
-          onExternalAiRiskAnalysis={runExternalAiRiskAnalysis}
-          onRunAction={runSalesAction}
-          opportunity={selected}
-          providerStatus={providerStatus}
-          safeContextPreview={safeContextPreview}
-          transform={transform}
-          t={t}
-        />
-      ) : page === "meeting" ? (
-        <MeetingCopilotShell actionLoading={actionLoading} actionResults={actionResults} onRunAction={runSalesAction} providerStatus={providerStatus} />
-      ) : page === "portfolio" ? (
-        <PortfolioIntelligenceShell actionLoading={actionLoading} actionResults={actionResults} onRunAction={runSalesAction} providerStatus={providerStatus} />
       ) : page === "actions" ? (
         <AiSalesActions
           actionCustomerToken={actionCustomerToken}

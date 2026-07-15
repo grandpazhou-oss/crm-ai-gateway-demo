@@ -9,6 +9,7 @@ import { resolveProviderStatus } from "./ai/providers/providerRouter.mjs";
 import { createDynamicsClient } from "./dynamicsClient.mjs";
 import { createJsonStore, createOpportunityStore } from "./store.mjs";
 import { generateSyntheticOpportunities } from "./data/syntheticOpportunityGenerator.mjs";
+import { getDecisionOpportunity, getDecisionView, listDecisionScenarios } from "./decision/decisionService.mjs";
 import { transformOpportunity } from "./gateway.mjs";
 import { buildManagementDashboard } from "./management.mjs";
 
@@ -47,6 +48,35 @@ export function createApp({
     const opportunities = aiDemoScope(await store.listOpportunities());
     const filters = Object.fromEntries(Object.entries(request.query).filter(([, value]) => value !== ""));
     response.json({ data: buildManagementDashboard(opportunities, filters, now()) });
+  });
+
+  app.get("/api/decision-scenarios", (_request, response) => {
+    response.json({ data: listDecisionScenarios() });
+  });
+
+  app.get("/api/decision-view", (request, response) => {
+    try {
+      const mode = String(request.query.mode || "");
+      const scenarioId = String(request.query.scenarioId || "");
+      const opportunityToken = String(request.query.opportunityToken || "");
+      const data = getDecisionView({ mode, scenarioId, opportunityToken });
+      if (!data) return response.status(404).json({ error: "Decision opportunity not found in scope" });
+      return response.json({ data });
+    } catch (error) {
+      return response.status(400).json({ error: error instanceof Error ? error.message : "Invalid decision scope" });
+    }
+  });
+
+  app.get("/api/decision-opportunities/:opportunityToken", (request, response) => {
+    try {
+      const mode = String(request.query.mode || "");
+      const scenarioId = String(request.query.scenarioId || "");
+      const data = getDecisionOpportunity({ mode, scenarioId, opportunityToken: request.params.opportunityToken });
+      if (!data) return response.status(404).json({ error: "Decision opportunity not found in scope" });
+      return response.json({ data });
+    } catch (error) {
+      return response.status(400).json({ error: error instanceof Error ? error.message : "Invalid decision scope" });
+    }
   });
 
   app.get("/api/dynamics/status", (_request, response) => {

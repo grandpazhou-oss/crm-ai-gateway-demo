@@ -1,5 +1,6 @@
 import type { AiProviderStatus } from "../types";
 import type { UnifiedAiOutput } from "./contract";
+import type { DecisionMode, DecisionScenarioCatalog, DecisionView } from "./types";
 
 export function ProviderSafetyStrip({ status }: { status: AiProviderStatus | null }) {
   const provider = status?.provider || "demo";
@@ -17,27 +18,51 @@ export function ProviderSafetyStrip({ status }: { status: AiProviderStatus | nul
 }
 
 export function DecisionContextBar({
-  opportunityId,
-  opportunities,
+  catalog,
+  mode,
+  onModeChange,
   onOpportunityChange,
+  onReset,
+  onScenarioChange,
+  scenarioId,
   status,
+  view,
 }: {
-  opportunityId: string;
-  opportunities: Array<{ id: string; customer_code: string }>;
-  onOpportunityChange: (id: string) => void;
+  catalog: DecisionScenarioCatalog | null;
+  mode: DecisionMode;
+  onModeChange: (mode: DecisionMode) => void;
+  onOpportunityChange: (token: string) => void;
+  onReset: () => void;
+  onScenarioChange: (scenarioId: string) => void;
+  scenarioId: string;
   status: string;
+  view: DecisionView | null;
 }) {
   return (
     <section className="decision-context-bar">
       <label>
-        <span>Decision context</span>
-        <select disabled={!opportunities.length} value={opportunityId} onChange={(event) => onOpportunityChange(event.target.value)}>
-          {!opportunities.length ? <option value="">Local placeholder</option> : null}
-          {opportunities.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.customer_code}</option>)}
+        <span>Mode</span>
+        <select value={mode} onChange={(event) => onModeChange(event.target.value as DecisionMode)}>
+          <option value="portfolio">Portfolio</option>
+          <option value="scenario">Scenario Focus</option>
         </select>
       </label>
+      <label>
+        <span>Scenario</span>
+        <select disabled={mode !== "scenario" || !catalog} value={scenarioId} onChange={(event) => onScenarioChange(event.target.value)}>
+          {(catalog?.scenarios || []).map((item) => <option key={item.id} value={item.id}>{item.title} ({item.count})</option>)}
+        </select>
+      </label>
+      <label className="decision-opportunity-select">
+        <span>Safe opportunity</span>
+        <select disabled={!view?.opportunities.length} value={view?.selectedOpportunity || ""} onChange={(event) => onOpportunityChange(event.target.value)}>
+          {!view?.opportunities.length ? <option value="">Local fixture unavailable</option> : null}
+          {(view?.opportunities || []).map((item) => <option key={item.opportunityToken} value={item.opportunityToken}>{item.opportunityToken} · {item.stage} · {item.priority}</option>)}
+        </select>
+      </label>
+      <button className="decision-reset" onClick={onReset}>Reset Portfolio</button>
       <p>{status}</p>
-      <span>No automatic CRM write-back</span>
+      <span className="decision-writeback-boundary">No automatic CRM write-back</span>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import type { AiActionName, AiActionResult, AiDemoChatResult, AiProviderStatus, AiResult, AuditEntry, DashboardFilters, DynamicsStatus, ManagementDashboard, Opportunity, Role, TransformResult } from "./types";
 import { DEFAULT_LANGUAGE } from "./config/language";
+import type { DecisionMode, DecisionScenarioCatalog, DecisionView } from "./decision/types";
 
 async function json<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -78,4 +79,15 @@ export function getAuditLog() {
 
 export function resetAuditLog() {
   return json<{ ok: boolean }>("/api/audit-log/reset", { method: "POST" });
+}
+
+export function getDecisionScenarios() {
+  return json<{ data: DecisionScenarioCatalog }>("/api/decision-scenarios");
+}
+
+export function getDecisionView(mode: DecisionMode, scenarioId = "", opportunityToken = "") {
+  const params = new URLSearchParams({ mode });
+  if (scenarioId) params.set("scenarioId", scenarioId);
+  if (opportunityToken) params.set("opportunityToken", opportunityToken);
+  return json<{ data: DecisionView }>(`/api/decision-view?${params.toString()}`);
 }
