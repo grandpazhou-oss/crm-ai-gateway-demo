@@ -10,6 +10,7 @@ import { createDynamicsClient } from "./dynamicsClient.mjs";
 import { createJsonStore, createOpportunityStore } from "./store.mjs";
 import { generateSyntheticOpportunities } from "./data/syntheticOpportunityGenerator.mjs";
 import { getDecisionOpportunity, getDecisionView, listDecisionScenarios } from "./decision/decisionService.mjs";
+import { createComparisonHarness } from "./decision/comparisonHarness.mjs";
 import { transformOpportunity } from "./gateway.mjs";
 import { buildManagementDashboard } from "./management.mjs";
 
@@ -30,8 +31,11 @@ export function createApp({
     dataSource: process.env.DATA_SOURCE || "mock",
   }),
   now = () => new Date(),
+  env = process.env,
+  fetchImpl = globalThis.fetch,
 } = {}) {
   const app = express();
+  const comparisonHarness = createComparisonHarness({ env, fetchImpl, now });
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/api/opportunities", async (_request, response) => {
@@ -77,6 +81,26 @@ export function createApp({
     } catch (error) {
       return response.status(400).json({ error: error instanceof Error ? error.message : "Invalid decision scope" });
     }
+  });
+
+  app.get("/api/decision-comparison/status", (_request, response) => {
+    response.json({ data: comparisonHarness.status() });
+  });
+
+  app.get("/api/decision-comparison/audit", (_request, response) => {
+    response.json({ data: comparisonHarness.listAudit() });
+  });
+
+  app.post("/api/decision-comparison/run", async (request, response) => {
+    const controller = new AbortController();
+    response.once("close", () => { if (!response.writableEnded) controller.abort(); });
+    const result = await comparisonHarness.compare({ ...request.body, signal: controller.signal });
+    return response.json({ data: result });
+  });
+
+  app.post("/api/decision-comparison/reset", (_request, response) => {
+    comparisonHarness.reset();
+    response.json({ ok: true });
   });
 
   app.get("/api/dynamics/status", (_request, response) => {
@@ -180,7 +204,8 @@ export function createApp({
   });
 
   app.get("/api/ai/provider-status", (_request, response) => {
-    const status = resolveProviderStatus(process.env);
+    const status = resolveProviderStatus(env);
+    const comparisonStatus = comparisonHarness.status();
     response.json({
       data: {
         provider: status.provider,
@@ -190,16 +215,18 @@ export function createApp({
         safeContextOnly: true,
         rawDataSent: false,
         fallbackReason: status.fallbackReason || "",
-        baseUrlConfigured: Boolean(process.env.LLM_BASE_URL),
-        apiKeyConfigured: Boolean(process.env.LLM_API_KEY),
-        modelConfigured: Boolean(process.env.LLM_MODEL),
-        modelName: process.env.LLM_MODEL || "",
-        timeoutMs: Number(process.env.LLM_TIMEOUT_MS || 20000),
+        baseUrlConfigured: Boolean(env.LLM_BASE_URL),
+        apiKeyConfigured: Boolean(env.LLM_API_KEY),
+        modelConfigured: Boolean(env.LLM_MODEL),
+        modelName: env.LLM_MODEL || "",
+        timeoutMs: Number(env.LLM_TIMEOUT_MS || 20000),
         retryPolicy: "response-format-once",
-        maxResponseTokens: Number(process.env.LLM_MAX_TOKENS || 1200),
+        maxResponseTokens: Number(env.LLM_MAX_TOKENS || 1200),
         schemaVersion: "unified-ai-output-v1",
         lastConnectionCheckAt: "",
         lastConnectionCheckResult: "not-run",
+        comparisonFeatureEnabled: comparisonStatus.featureEnabled,
+        comparisonAvailable: comparisonStatus.available,
       },
     });
   });

@@ -284,6 +284,8 @@ export type AiProviderStatus = {
   schemaVersion?: string;
   lastConnectionCheckAt?: string;
   lastConnectionCheckResult?: string;
+  comparisonFeatureEnabled?: boolean;
+  comparisonAvailable?: boolean;
 };
 
 export type AiActionName = "opportunity-brief" | "next-best-actions" | "risk-summary" | "data-doctor" | "meeting-copilot" | "customer-growth" | "draft-pack";

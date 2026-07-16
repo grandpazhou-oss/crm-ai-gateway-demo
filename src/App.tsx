@@ -121,7 +121,7 @@ export default function App() {
       <ProviderSafetyStrip status={providerStatus} operationStatus={status} />
 
       {page === "gateway" ? (
-        <AuditSafetyPage amountDisplayMode={amountDisplayMode} auditLog={auditLog} providerStatus={providerStatus} view={view} />
+        <AuditSafetyPage amountDisplayMode={amountDisplayMode} auditLog={auditLog} catalog={catalog} providerStatus={providerStatus} view={view} />
       ) : (
         <DecisionWorkspace
           amountDisplayMode={amountDisplayMode}

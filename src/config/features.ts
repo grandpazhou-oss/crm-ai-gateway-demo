@@ -1,5 +1,7 @@
+const runtimeEnv = import.meta.env;
+
 export const PRODUCT_FEATURES = Object.freeze({
   externalModelStatus: true,
-  modelComparison: false,
+  modelComparison: runtimeEnv?.VITE_FEATURE_MODEL_COMPARISON === "true",
   deepAnalysis: false,
 });

@@ -1,6 +1,7 @@
 import type { AiActionName, AiActionResult, AiDemoChatResult, AiProviderStatus, AiResult, AuditEntry, DashboardFilters, DynamicsStatus, ManagementDashboard, Opportunity, Role, TransformResult } from "./types";
 import { DEFAULT_LANGUAGE } from "./config/language";
 import type { DecisionMode, DecisionOpportunityDetail, DecisionScenarioCatalog, DecisionView } from "./decision/types";
+import type { ComparisonPage, ComparisonResult, ComparisonStatus } from "./decision/comparisonTypes";
 
 async function json<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -96,4 +97,16 @@ export function getDecisionOpportunity(opportunityToken: string, mode: DecisionM
   const params = new URLSearchParams({ mode });
   if (scenarioId) params.set("scenarioId", scenarioId);
   return json<{ data: DecisionOpportunityDetail }>(`/api/decision-opportunities/${encodeURIComponent(opportunityToken)}?${params.toString()}`, { signal });
+}
+
+export function getDecisionComparisonStatus() {
+  return json<{ data: ComparisonStatus }>("/api/decision-comparison/status");
+}
+
+export function runDecisionComparison(input: { scenarioId: string; opportunityToken: string; page: ComparisonPage }, signal?: AbortSignal) {
+  return json<{ data: ComparisonResult }>("/api/decision-comparison/run", { method: "POST", signal, body: JSON.stringify({ ...input, confirmed: true }) });
+}
+
+export function resetDecisionComparison() {
+  return json<{ ok: true }>("/api/decision-comparison/reset", { method: "POST" });
 }
