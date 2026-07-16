@@ -132,6 +132,7 @@ export default function App() {
           onRetry={() => loadView()}
           onToggleRail={() => setRailExpanded((current) => !current)}
           page={page}
+          providerStatus={providerStatus}
           railExpanded={railExpanded}
           scenarioId={scenarioId}
           view={view}

@@ -1,14 +1,17 @@
 import type { AiProviderStatus } from "../types";
+import { PRODUCT_FEATURES } from "../config/features";
 import type { UnifiedAiOutput } from "./contract";
 import { booleanLabel, decisionText, fallbackReasonLabel, maskOpportunityToken, priorityLabel, scenarioTitle, stageLabel } from "./display";
+import { externalAnalysisStatus, externalAnalysisStatusLabel } from "./externalModelUi";
 import type { AmountDisplayMode, DecisionMode, DecisionScenarioCatalog, DecisionView } from "./types";
 
 export function ProviderSafetyStrip({ status, operationStatus = "" }: { status: AiProviderStatus | null; operationStatus?: string }) {
+  const externalStatus = externalAnalysisStatus(status);
   return (
     <section className="provider-safety-strip compact" aria-label="模型和安全状态">
       <strong>{status?.provider || "demo"} Provider</strong><span aria-hidden="true">·</span>
       <span>Safe Context 已启用</span><span aria-hidden="true">·</span>
-      <span>外部模型{status?.externalAiEnabled ? "已授权" : "未调用"}</span><span aria-hidden="true">·</span>
+      <span className={`external-status status-${externalStatus}`}>{externalAnalysisStatusLabel(status, true)}</span><span aria-hidden="true">·</span>
       <span>原始数据{status?.rawDataSent ? "已阻断" : "未外发"}</span><span aria-hidden="true">·</span>
       <span>只读</span><span className="operation-status" aria-live="polite">{operationStatus}</span>
     </section>
@@ -42,6 +45,21 @@ export function DecisionContextBar({ catalog, amountDisplayMode, onAmountDisplay
 
 export function DecisionPageHeader({ title, description }: { title: string; description: string }) {
   return <header className="decision-page-header"><div><h2>{title}</h2><p>{description}</p></div><span>只读决策支持</span></header>;
+}
+
+export function ExternalModelReadiness({ status, latestAnalysis = "当前审计源未提供" }: { status: AiProviderStatus | null; latestAnalysis?: string }) {
+  const state = externalAnalysisStatus(status);
+  return <section className={`external-readiness-banner status-${state}`} aria-label="外部模型可用性"><div><span>外部模型可用性</span><strong>{externalAnalysisStatusLabel(status)}</strong></div><dl><dt>最近深度分析</dt><dd>{latestAnalysis}</dd><dt>自动调用</dt><dd>禁用</dd></dl></section>;
+}
+
+export function DeepAnalysisReservation({ status, templateId, title }: { status: AiProviderStatus | null; templateId: string; title: string }) {
+  const state = externalAnalysisStatus(status);
+  const descriptionId = `deep-analysis-${templateId.toLowerCase()}`;
+  return <section className={`deep-analysis-reservation status-${state}`} aria-label={`${title}深度分析预留`}><div><span>{templateId}</span><h3>{title}</h3><p id={descriptionId}>深度分析尚未启用。完成外部模型授权、客户历史安全聚合和调用确认流程后开放。</p></div><button disabled={!PRODUCT_FEATURES.deepAnalysis} aria-describedby={descriptionId}>进行深度分析</button></section>;
+}
+
+export function ProductStatusPanel({ kind, title, message }: { kind: "loading" | "empty" | "error" | "blocked" | "fallback"; title: string; message: string }) {
+  return <section className={`product-status-panel status-${kind}`} role={kind === "error" || kind === "blocked" ? "status" : undefined}><span>{kind === "blocked" ? "受控阻断" : kind === "fallback" ? "安全回退" : "状态"}</span><h3>{title}</h3><p>{message}</p></section>;
 }
 
 export function FactList({ output }: { output: UnifiedAiOutput }) {

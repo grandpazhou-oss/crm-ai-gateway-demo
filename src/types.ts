@@ -274,6 +274,16 @@ export type AiProviderStatus = {
   safeContextOnly: boolean;
   rawDataSent: boolean;
   fallbackReason?: string;
+  baseUrlConfigured?: boolean;
+  apiKeyConfigured?: boolean;
+  modelConfigured?: boolean;
+  modelName?: string;
+  timeoutMs?: number;
+  retryPolicy?: string;
+  maxResponseTokens?: number;
+  schemaVersion?: string;
+  lastConnectionCheckAt?: string;
+  lastConnectionCheckResult?: string;
 };
 
 export type AiActionName = "opportunity-brief" | "next-best-actions" | "risk-summary" | "data-doctor" | "meeting-copilot" | "customer-growth" | "draft-pack";

@@ -190,6 +190,16 @@ export function createApp({
         safeContextOnly: true,
         rawDataSent: false,
         fallbackReason: status.fallbackReason || "",
+        baseUrlConfigured: Boolean(process.env.LLM_BASE_URL),
+        apiKeyConfigured: Boolean(process.env.LLM_API_KEY),
+        modelConfigured: Boolean(process.env.LLM_MODEL),
+        modelName: process.env.LLM_MODEL || "",
+        timeoutMs: Number(process.env.LLM_TIMEOUT_MS || 20000),
+        retryPolicy: "response-format-once",
+        maxResponseTokens: Number(process.env.LLM_MAX_TOKENS || 1200),
+        schemaVersion: "unified-ai-output-v1",
+        lastConnectionCheckAt: "",
+        lastConnectionCheckResult: "not-run",
       },
     });
   });

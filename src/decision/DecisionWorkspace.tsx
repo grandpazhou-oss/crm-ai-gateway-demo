@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getDecisionOpportunity } from "../api";
+import type { AiProviderStatus } from "../types";
 import type { UnifiedAiOutput } from "./contract";
-import { DecisionPageHeader, EvidenceList, FactList, InferencePanel, TechnicalDetails } from "./DecisionUi";
+import { DecisionPageHeader, DeepAnalysisReservation, EvidenceList, ExternalModelReadiness, FactList, InferencePanel, TechnicalDetails } from "./DecisionUi";
 import { booleanLabel, decisionText, maskOpportunityToken, priorityLabel, scenarioTitle, stageLabel } from "./display";
 import { portfolioScope, priorityDistribution, productActions, sortedRiskOpportunities } from "./productModel";
 import { RiskDetailPool, riskDetailKey } from "./riskDetailPool";
@@ -20,7 +21,7 @@ const PAGE_COPY: Record<DecisionPage, { title: string; description: string }> = 
   portfolio: { title: "组合洞察", description: "明确统计口径后查看风险分布与客户级安全聚合。" },
 };
 
-export function DecisionWorkspace({ amountDisplayMode, page, view, loading, error, onRetry, onOpportunityChange, onNavigate = () => undefined, railExpanded = false, onToggleRail = () => undefined, scenarioId = "" }: {
+export function DecisionWorkspace({ amountDisplayMode, page, view, loading, error, onRetry, onOpportunityChange, onNavigate = () => undefined, providerStatus = null, railExpanded = false, onToggleRail = () => undefined, scenarioId = "" }: {
   amountDisplayMode: AmountDisplayMode;
   page: DecisionPage;
   view: DecisionView | null;
@@ -29,6 +30,7 @@ export function DecisionWorkspace({ amountDisplayMode, page, view, loading, erro
   onRetry: () => void;
   onOpportunityChange: (token: string) => void;
   onNavigate?: (page: ProductPage) => void;
+  providerStatus?: AiProviderStatus | null;
   railExpanded?: boolean;
   onToggleRail?: () => void;
   scenarioId?: string;
@@ -69,20 +71,20 @@ export function DecisionWorkspace({ amountDisplayMode, page, view, loading, erro
   if (loading) return <LoadingState />;
   if (error || !view) return <ErrorState message={error || "未返回本地决策视图。"} onRetry={onRetry} />;
   const copy = PAGE_COPY[page];
-  const rail = <DecisionContextRail amountDisplayMode={amountDisplayMode} output={view.pack[pageOutput(page)]} view={view} expanded={railExpanded} onToggle={onToggleRail} />;
+  const rail = <DecisionContextRail amountDisplayMode={amountDisplayMode} output={view.pack[pageOutput(page)]} providerStatus={providerStatus} view={view} expanded={railExpanded} onToggle={onToggleRail} />;
 
   return <section className={`decision-workspace page-${page}`} data-page={page}>
     <DecisionPageHeader title={copy.title} description={copy.description} />
-    {page === "cockpit" ? <CockpitPage view={view} detailFor={detailFor} requestDetail={requestDetail} onOpportunityChange={onOpportunityChange} onNavigate={onNavigate} rail={rail} /> : null}
+    {page === "cockpit" ? <CockpitPage view={view} detailFor={detailFor} requestDetail={requestDetail} onOpportunityChange={onOpportunityChange} onNavigate={onNavigate} providerStatus={providerStatus} rail={rail} /> : null}
     {page === "risk" ? <RiskPage view={view} detailFor={detailFor} requestDetail={requestDetail} onOpportunityChange={onOpportunityChange} rail={rail} /> : null}
-    {page === "detail" ? <Opportunity360Page view={view} rail={rail} /> : null}
+    {page === "detail" ? <Opportunity360Page providerStatus={providerStatus} view={view} rail={rail} /> : null}
     {page === "actionBoard" ? <ActionBoardPage view={view} rail={rail} /> : null}
-    {page === "meeting" ? <MeetingPage view={view} rail={rail} /> : null}
+    {page === "meeting" ? <MeetingPage providerStatus={providerStatus} view={view} rail={rail} /> : null}
     {page === "portfolio" ? <PortfolioPage view={view} rail={rail} /> : null}
   </section>;
 }
 
-function CockpitPage({ view, detailFor, requestDetail, onOpportunityChange, onNavigate, rail }: PageWithQueueProps & { onNavigate: (page: ProductPage) => void }) {
+function CockpitPage({ view, detailFor, requestDetail, onOpportunityChange, onNavigate, providerStatus, rail }: PageWithQueueProps & { onNavigate: (page: ProductPage) => void; providerStatus: AiProviderStatus | null }) {
   const actions = productActions(view).slice(0, 3);
   const topRisks = sortedRiskOpportunities(view).slice(0, 5);
   return <>
@@ -93,6 +95,7 @@ function CockpitPage({ view, detailFor, requestDetail, onOpportunityChange, onNa
         <section className="management-summary product-panel"><span className={`decision-priority priority-${view.pack.cockpit.priority.toLowerCase()}`}>{priorityLabel(view.pack.cockpit.priority)}</span><h3>当前管理摘要</h3><p>{decisionText(view.pack.cockpit.inference)}</p><div className="selected-summary"><strong>{maskOpportunityToken(view.selectedOpportunity)}</strong><span>{stageLabel(view.safeContext.stage)} · {decisionText(view.safeContext.stagnationBand)}</span></div></section>
         <section className="top-actions product-panel"><header><div><h3>Top 建议行动</h3><p>仅展示 Provider 已提供的建议</p></div><button onClick={() => onNavigate("actionBoard")}>进入行动看板</button></header>{actions.map((action) => <article key={action.id}><strong>{decisionText(action.title)}</strong><p>{decisionText(action.reason)}</p><small>{action.owner} · {decisionText(action.due)}</small></article>)}</section>
         <section className="scenario-status product-panel"><h3>场景与数据状态</h3><dl><dt>当前模式</dt><dd>{view.mode === "portfolio" ? "组合视图" : "场景聚焦"}</dd><dt>当前场景</dt><dd>{view.scenario ? scenarioTitle(view.scenario.id, view.scenario.title) : "全部本地组合"}</dd><dt>数据范围</dt><dd>{view.scopeSummary.scopeCount} 条脱敏商机</dd><dt>情报状态</dt><dd>仅基于 CRM Safe Context</dd></dl></section>
+        <ExternalModelReadiness status={providerStatus} />
       </div>{rail}
     </div>
   </>;
@@ -102,9 +105,9 @@ function RiskPage({ view, detailFor, requestDetail, onOpportunityChange, rail }:
   return <div className="risk-product-layout product-three-column"><RiskQueue view={view} detailFor={detailFor} requestDetail={requestDetail} onOpportunityChange={onOpportunityChange} /><section className="risk-detail product-panel"><header><span className={`decision-priority priority-${view.pack.risk.priority.toLowerCase()}`}>{priorityLabel(view.pack.risk.priority)}</span><div><h3>{maskOpportunityToken(view.selectedOpportunity)}</h3><p>建议复核顺序：当前队列优先级内按 Token 稳定排序</p></div></header><div className="risk-decision-grid"><FactList output={view.pack.risk} /><InferencePanel output={view.pack.risk} /><EvidenceList output={view.pack.risk} /></div><section className="review-order"><h3>建议复核步骤</h3>{view.pack.risk.recommendedAction.map((item) => <article key={item.title}><strong>{decisionText(item.title)}</strong><p>{decisionText(item.reason)}</p></article>)}</section><TechnicalDetails output={view.pack.risk} /></section>{rail}</div>;
 }
 
-function Opportunity360Page({ view, rail }: { view: DecisionView; rail: ReactNode }) {
+function Opportunity360Page({ providerStatus, view, rail }: { providerStatus: AiProviderStatus | null; view: DecisionView; rail: ReactNode }) {
   const output = view.pack.opportunity360;
-  return <div className="detail-product-layout product-two-column"><main className="opportunity-360-main"><section className="opportunity-overview product-panel"><div><span>脱敏商机</span><strong>{maskOpportunityToken(view.selectedOpportunity)}</strong></div><div><span>当前阶段</span><strong>{stageLabel(view.safeContext.stage)}</strong></div><div><span>优先级</span><strong>{priorityLabel(output.priority)}</strong></div><div><span>决策准备度</span><strong>{decisionText(view.safeContext.decisionReadiness)}</strong></div></section><div className="opportunity-decision-grid"><FactList output={output} /><InferencePanel output={output} /><EvidenceList output={output} /><section className="product-action-summary"><h3>建议行动</h3>{output.recommendedAction.map((item) => <article key={item.title}><strong>{decisionText(item.title)}</strong><p>{decisionText(item.reason)}</p></article>)}</section></div><section className="context-availability"><article><h3>客户历史</h3><strong>客户历史尚未接入</strong><p>当前仅基于 CRM Safe Context 分析。</p></article><article><h3>外部事实</h3><strong>外部行业与市场情报尚未启用</strong><p>当前没有外部来源可供引用。</p></article></section><TechnicalDetails output={output} /></main>{rail}</div>;
+  return <div className="detail-product-layout product-two-column"><main className="opportunity-360-main"><section className="opportunity-overview product-panel"><div><span>脱敏商机</span><strong>{maskOpportunityToken(view.selectedOpportunity)}</strong></div><div><span>当前阶段</span><strong>{stageLabel(view.safeContext.stage)}</strong></div><div><span>优先级</span><strong>{priorityLabel(output.priority)}</strong></div><div><span>决策准备度</span><strong>{decisionText(view.safeContext.decisionReadiness)}</strong></div></section><DeepAnalysisReservation status={providerStatus} templateId="DA-02" title="当前案件赢单与风险分析" /><div className="opportunity-decision-grid"><FactList output={output} /><InferencePanel output={output} /><EvidenceList output={output} /><section className="product-action-summary"><h3>建议行动</h3>{output.recommendedAction.map((item) => <article key={item.title}><strong>{decisionText(item.title)}</strong><p>{decisionText(item.reason)}</p></article>)}</section></div><section className="context-availability"><article><h3>客户历史</h3><strong>客户历史尚未接入</strong><p>当前仅基于 CRM Safe Context 分析。</p></article><article><h3>外部事实</h3><strong>外部行业与市场情报尚未启用</strong><p>当前没有外部来源可供引用。</p><details><summary>引用与来源</summary><span>当前没有已批准的外部来源。</span></details></article></section><TechnicalDetails output={output} /></main>{rail}</div>;
 }
 
 function ActionBoardPage({ view, rail }: { view: DecisionView; rail: ReactNode }) {
@@ -113,9 +116,9 @@ function ActionBoardPage({ view, rail }: { view: DecisionView; rail: ReactNode }
   return <div className="action-product-layout product-two-column"><main className="action-board-list"><header className="product-section-heading"><div><h3>建议行动列表</h3><p>{maskOpportunityToken(view.selectedOpportunity)} · 只读草案</p></div><span>{actions.length} 项</span></header>{actions.map((action) => <article className="action-row" key={action.id}><div className="action-row-main"><span className={`decision-priority priority-${action.priority.toLowerCase()}`}>{priorityLabel(action.priority)}</span><div><h3>{decisionText(action.title)}</h3><p>{decisionText(action.reason)}</p></div></div><dl><dt>建议角色</dt><dd>{decisionText(action.owner)}</dd><dt>建议期限</dt><dd>{decisionText(action.due)}</dd><dt>状态</dt><dd>{decisionText(action.status)}</dd><dt>证据</dt><dd>{action.evidenceCount} 项</dd></dl><div className="action-row-buttons"><button onClick={() => setOpen({ id: action.id, mode: "detail" })}>查看行动详情</button><button onClick={() => setOpen({ id: action.id, mode: "evidence" })}>查看支持证据</button><button onClick={() => setOpen({ id: action.id, mode: "draft" })}>生成行动草案</button></div>{open?.id === action.id ? <section className="local-action-preview"><strong>{open.mode === "detail" ? "行动详情" : open.mode === "evidence" ? "支持证据" : "本地草案预览"}</strong><p>{open.mode === "evidence" ? view.pack.action.evidence.map((item) => `${decisionText(item.label)}：${decisionText(item.value)}`).join("；") || "当前没有更多证据。" : `${decisionText(action.title)}：${decisionText(action.reason)}`}</p><small>仅在当前页面组织已有内容，未调用模型或写回 CRM。</small></section> : null}</article>)}{!actions.length ? <EmptyPanel title="当前没有建议行动" body="当前 Decision Pack 未提供可展示的行动。" /> : null}<TechnicalDetails output={view.pack.action} /></main>{rail}</div>;
 }
 
-function MeetingPage({ view, rail }: { view: DecisionView; rail: ReactNode }) {
+function MeetingPage({ providerStatus, view, rail }: { providerStatus: AiProviderStatus | null; view: DecisionView; rail: ReactNode }) {
   const output = view.pack.meeting;
-  return <div className="meeting-product-layout product-two-column"><main className="meeting-main"><section className="meeting-signal-grid"><Signal label="会议窗口" value={view.safeContext.meetingWindow} /><Signal label="关键角色覆盖" value={view.safeContext.stakeholderCoverage} /><Signal label="待确认问题" value={`${view.safeContext.openQuestionCount} 项`} /><Signal label="决策准备度" value={view.safeContext.decisionReadiness} /></section><div className="meeting-agenda-grid"><section className="product-panel"><h3>会议目标</h3><p>{output.recommendedAction[0] ? decisionText(output.recommendedAction[0].title) : "当前没有可用目标。"}</p></section><section className="product-panel"><h3>建议提问</h3><p>{view.safeContext.openQuestionCount ? `围绕 ${view.safeContext.openQuestionCount} 项待确认问题逐项核实决策条件。` : "当前没有安全信号支持新增问题。"}</p></section><section className="product-panel"><h3>必须确认事项</h3>{output.evidence.map((item) => <p key={item.source}>{decisionText(item.label)}：{decisionText(item.value)}</p>)}</section><section className="product-panel"><h3>潜在异议</h3><p>当前 Safe Context 未提供可验证的异议内容。</p></section><section className="product-panel meeting-followup"><h3>会后行动建议</h3><p>{output.recommendedAction[0] ? decisionText(output.recommendedAction[0].reason) : "待人工确定。"}</p></section></div><p className="timeline-disclaimer">当前未读取或展示 Timeline 原文，仅使用安全派生信号。</p><TechnicalDetails output={output} /></main>{rail}</div>;
+  return <div className="meeting-product-layout product-two-column"><main className="meeting-main"><DeepAnalysisReservation status={providerStatus} templateId="DA-07" title="会前准备与谈判策略" /><section className="meeting-signal-grid"><Signal label="会议窗口" value={view.safeContext.meetingWindow} /><Signal label="关键角色覆盖" value={view.safeContext.stakeholderCoverage} /><Signal label="待确认问题" value={`${view.safeContext.openQuestionCount} 项`} /><Signal label="决策准备度" value={view.safeContext.decisionReadiness} /></section><div className="meeting-agenda-grid"><section className="product-panel"><h3>会议目标</h3><p>{output.recommendedAction[0] ? decisionText(output.recommendedAction[0].title) : "当前没有可用目标。"}</p></section><section className="product-panel"><h3>建议提问</h3><p>{view.safeContext.openQuestionCount ? `围绕 ${view.safeContext.openQuestionCount} 项待确认问题逐项核实决策条件。` : "当前没有安全信号支持新增问题。"}</p></section><section className="product-panel"><h3>必须确认事项</h3>{output.evidence.map((item) => <p key={item.source}>{decisionText(item.label)}：{decisionText(item.value)}</p>)}</section><section className="product-panel"><h3>潜在异议</h3><p>当前 Safe Context 未提供可验证的异议内容。</p></section><section className="product-panel meeting-followup"><h3>会后行动建议</h3><p>{output.recommendedAction[0] ? decisionText(output.recommendedAction[0].reason) : "待人工确定。"}</p></section></div><p className="timeline-disclaimer">当前未读取或展示 Timeline 原文，仅使用安全派生信号。</p><TechnicalDetails output={output} /></main>{rail}</div>;
 }
 
 function PortfolioPage({ view, rail }: { view: DecisionView; rail: ReactNode }) {
@@ -149,8 +152,8 @@ function RiskRow({ item, rank, selected, state, onVisible, onSelect, onRetry }: 
   return <div ref={rowRef} className={`risk-row${selected ? " selected" : ""}`}><button onClick={onSelect} aria-current={selected ? "true" : undefined}><span className="risk-rank">#{rank}</span><span className={`risk-level priority-${item.priority.toLowerCase()}`}>{priorityLabel(item.priority)}</span><strong>{maskOpportunityToken(item.opportunityToken)}</strong><small>{stageLabel(item.stage)} · {detail ? decisionText(detail.safeContext.stagnationBand) : "正在读取推进状态"}</small><p>{detail ? decisionText(detail.opportunity360.inference) : state.error ? "安全详情暂不可用" : "正在读取安全原因…"}</p><em>{detail ? `${detail.opportunity360.evidence.length} 项证据` : "证据读取中"}</em></button>{state.error && onRetry ? <button className="risk-retry" onClick={onRetry}>重试详情</button> : null}</div>;
 }
 
-function DecisionContextRail({ amountDisplayMode, output, view, expanded, onToggle }: { amountDisplayMode: AmountDisplayMode; output: UnifiedAiOutput; view: DecisionView; expanded: boolean; onToggle: () => void }) {
-  return <aside className={`decision-context-rail${expanded ? " expanded" : " compact"}`} aria-label="置信度和安全状态"><header><h3>判断与安全</h3><button aria-expanded={expanded} onClick={onToggle}>{expanded ? "收起" : "展开"}</button></header><section className={`rail-confidence confidence-${output.confidence.level.toLowerCase()}`}><span>置信度</span><strong>{decisionText(output.confidence.level)}</strong>{expanded ? <p>{decisionText(output.confidence.reason)}</p> : null}</section><dl><dt>当前模型</dt><dd>{output.providerUsed}</dd><dt>Safe Context</dt><dd>{booleanLabel(output.safeContextUsed)}</dd><dt>外部模型调用</dt><dd>{booleanLabel(output.externalModelCalled)}</dd><dt>金额显示</dt><dd>{amountDisplayMode === "range" ? "金额区间" : "精确金额（仅界面）"}</dd>{expanded ? <><dt>Fallback</dt><dd>{output.fallbackReason || "无"}</dd><dt>原始数据外发</dt><dd>{booleanLabel(output.rawDataSent)}</dd><dt>精确金额发送模型</dt><dd>否</dd><dt>当前权限</dt><dd>演示全权限</dd><dt>当前部门范围</dt><dd>字段待接入</dd><dt>当前商机 Token</dt><dd>{maskOpportunityToken(view.selectedOpportunity)}</dd><dt>情报状态</dt><dd>仅基于 CRM 分析</dd></> : null}</dl></aside>;
+function DecisionContextRail({ amountDisplayMode, output, providerStatus, view, expanded, onToggle }: { amountDisplayMode: AmountDisplayMode; output: UnifiedAiOutput; providerStatus: AiProviderStatus | null; view: DecisionView; expanded: boolean; onToggle: () => void }) {
+  return <aside className={`decision-context-rail${expanded ? " expanded" : " compact"}`} aria-label="置信度和安全状态"><header><h3>判断与安全</h3><button aria-expanded={expanded} onClick={onToggle}>{expanded ? "收起" : "展开"}</button></header><section className={`rail-confidence confidence-${output.confidence.level.toLowerCase()}`}><span>置信度</span><strong>{decisionText(output.confidence.level)}</strong>{expanded ? <p>{decisionText(output.confidence.reason)}</p> : null}</section><dl><dt>当前 Provider</dt><dd>{output.providerUsed}</dd><dt>当前模型</dt><dd>{providerStatus?.modelName || "Demo 规则模型"}</dd><dt>外部模型调用</dt><dd>{booleanLabel(output.externalModelCalled)}</dd><dt>Safe Context</dt><dd>{booleanLabel(output.safeContextUsed)}</dd><dt>金额显示</dt><dd>{amountDisplayMode === "range" ? "金额区间" : "精确金额（仅界面）"}</dd><dt>情报模式</dt><dd>仅 CRM</dd>{expanded ? <><dt>Fallback</dt><dd>{output.fallbackReason || "无"}</dd><dt>原始数据外发</dt><dd>{booleanLabel(output.rawDataSent)}</dd><dt>精确金额发送模型</dt><dd>否</dd><dt>Timeline 原文发送模型</dt><dd>否</dd><dt>Schema Validation</dt><dd>当前未执行</dd><dt>Safety Validation</dt><dd>当前未执行</dd><dt>Citation Validation</dt><dd>当前未执行</dd><dt>Latency</dt><dd>当前审计源未提供</dd><dt>当前权限</dt><dd>演示全权限</dd><dt>当前部门范围</dt><dd>字段待接入</dd><dt>当前商机 Token</dt><dd>{maskOpportunityToken(view.selectedOpportunity)}</dd></> : null}</dl></aside>;
 }
 
 function ScopeMetrics({ view }: { view: DecisionView }) { return <section className="decision-scope-metrics" aria-label="当前分析范围"><Metric label="当前范围" value={view.scopeSummary.scopeCount} /><Metric label="严重风险" value={view.scopeSummary.criticalCount} tone="critical" /><Metric label="高风险" value={view.scopeSummary.highCount} tone="high" /><Metric label="待复核" value={view.scopeSummary.reviewRequiredCount} /></section>; }

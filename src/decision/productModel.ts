@@ -95,6 +95,8 @@ export type SafeAuditRow = {
   schemaStatus: string;
   safetyStatus: string;
   fallback: string;
+  latency: string;
+  citationStatus: string;
 };
 
 export function safeAuditRows(entries: AuditEntry[]): SafeAuditRow[] {
@@ -108,6 +110,8 @@ export function safeAuditRows(entries: AuditEntry[]): SafeAuditRow[] {
     schemaStatus: entry.response_format_requested === undefined ? "未记录" : entry.response_format_requested ? "已请求结构化输出" : "未请求",
     safetyStatus: entry.output_guard_status || entry.checklist_result || "未记录",
     fallback: entry.fallback_used ? entry.fallback_reason || "已回退" : "无",
+    latency: entry.duration_ms === undefined ? "未记录" : `${entry.duration_ms} ms`,
+    citationStatus: "未记录",
   }));
 }
 
