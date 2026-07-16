@@ -10,7 +10,7 @@ const serverPath = new URL("../server/app.mjs", import.meta.url);
 test("decision navigation exposes the seven 6B workspaces and hides Legacy AI Lab", async () => {
   const source = await readFile(appPath, "utf8");
   const nav = source.match(/<nav className="tabs">([\s\S]*?)<\/nav>/)?.[1] || "";
-  for (const label of ["AI Cockpit", "Risk &amp; Priority", "Opportunity 360", "Action Board", "Meeting Copilot", "Portfolio Intelligence", "Audit &amp; Safety"]) {
+  for (const label of ["AI 驾驶舱", "风险与优先级", "商机 360", "行动看板", "会议副驾", "组合洞察", "审计与安全"]) {
     assert.ok(nav.includes(label), `missing navigation label: ${label}`);
   }
   assert.doesNotMatch(nav, /aiLab|Legacy AI Lab/);
@@ -29,10 +29,10 @@ test("unified output contract includes decision, provider, fallback, and safety 
 
 test("decision UI separates facts, inference, evidence, actions, confidence, and provider safety", async () => {
   const source = await readFile(uiPath, "utf8");
-  for (const label of ["CRM Fact", "AI Inference", "Recommended Action", "Evidence", "Confidence", "Provider used", "Fallback", "Safe Context", "External model", "Raw CRM sent"]) {
+  for (const label of ["当前 CRM 事实", "AI 综合推断", "建议行动", "证据", "置信度", "模型提供方", "回退状态", "安全上下文", "外部模型", "原始 CRM 数据"]) {
     assert.match(source, new RegExp(label));
   }
-  assert.match(source, /No automatic CRM write-back/);
+  assert.match(source, /不自动写回 CRM/);
 });
 
 test("provider status API exposes fallback without changing the existing endpoint", async () => {

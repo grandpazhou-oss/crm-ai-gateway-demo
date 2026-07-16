@@ -10,7 +10,8 @@ import { RiskSummary } from "./components/ai-actions/RiskSummary";
 import { DecisionContextBar, DecisionPageHeader, ProviderSafetyStrip, UnifiedDecisionCard } from "./decision/DecisionUi";
 import { DecisionWorkspace, type DecisionPage } from "./decision/DecisionWorkspace";
 import { adaptActionBoardItem, adaptLegacyActionResult, adaptRiskCase, placeholderOutput } from "./decision/contract";
-import type { DecisionMode, DecisionScenarioCatalog, DecisionView } from "./decision/types";
+import { scenarioTitle } from "./decision/display";
+import type { AmountDisplayMode, DecisionMode, DecisionScenarioCatalog, DecisionView } from "./decision/types";
 import { languages, useI18n, type Language, type TFunction } from "./i18n";
 import type { ActionBoardAction, AiActionName, AiActionResult, AiDemoChatResult, AiProviderStatus, AiResult, AuditEntry, DashboardFilters, DynamicsStatus, ManagementDashboard, Opportunity, RiskRadarCase, Role, TransformResult } from "./types";
 
@@ -60,6 +61,7 @@ export default function App() {
   const [decisionMode, setDecisionMode] = useState<DecisionMode>("portfolio");
   const [decisionScenarioId, setDecisionScenarioId] = useState("multi-risk-priority");
   const [decisionView, setDecisionView] = useState<DecisionView | null>(null);
+  const [amountDisplayMode, setAmountDisplayMode] = useState<AmountDisplayMode>("range");
   const [decisionLoading, setDecisionLoading] = useState(true);
   const [decisionError, setDecisionError] = useState("");
 
@@ -335,11 +337,12 @@ export default function App() {
     try {
       const result = await fetchDecisionView(mode, mode === "scenario" ? scenarioId : "", opportunityToken);
       setDecisionView(result.data);
-      setStatus(`${mode === "portfolio" ? "Portfolio" : result.data.scenario?.title || "Scenario"} decision view ready`);
+      const scenarioLabel = result.data.scenario ? scenarioTitle(result.data.scenario.id, result.data.scenario.title) : "场景聚焦";
+      setStatus(`${mode === "portfolio" ? "组合视图" : scenarioLabel}已就绪`);
     } catch (error) {
       setDecisionView(null);
       setDecisionError(error instanceof Error ? error.message : "Decision view failed");
-      setStatus("Decision view unavailable");
+      setStatus("决策视图暂不可用");
     } finally {
       setDecisionLoading(false);
     }
@@ -360,10 +363,19 @@ export default function App() {
     loadDecisionView(decisionMode, decisionScenarioId, token).catch(() => undefined);
   }
 
+  function changeAmountDisplayMode(nextMode: AmountDisplayMode) {
+    if (nextMode === "exact" && amountDisplayMode !== "exact") {
+      const confirmed = window.confirm("精确金额仅在当前受控界面展示，不会发送给外部模型。");
+      if (!confirmed) return;
+    }
+    setAmountDisplayMode(nextMode);
+  }
+
   function resetDecisionPortfolio() {
     const defaultToken = decisionCatalog?.portfolioDefaultOpportunity || "DEMO-6C-OPP-075";
     setDecisionMode("portfolio");
     setDecisionScenarioId("multi-risk-priority");
+    setAmountDisplayMode("range");
     loadDecisionView("portfolio", "", defaultToken).catch(() => undefined);
   }
 
@@ -420,7 +432,7 @@ export default function App() {
           return;
         }
         await refreshAudit();
-        setStatus("Management cockpit ready");
+        setStatus("AI 驾驶舱已就绪");
       })
       .catch(() => setStatus("Failed to load opportunities. Please check DATA_SOURCE and Dynamics connection."));
   }, []);
@@ -447,24 +459,26 @@ export default function App() {
           <h1>{t("app.title")}</h1>
         </div>
         <nav className="tabs">
-          <button className={page === "cockpit" ? "active" : ""} onClick={() => setPage("cockpit")}>AI Cockpit</button>
-          <button className={page === "risk" ? "active" : ""} onClick={() => setPage("risk")}>Risk &amp; Priority</button>
-          <button className={page === "detail" ? "active" : ""} onClick={() => setPage("detail")}>Opportunity 360</button>
-          <button className={page === "actionBoard" ? "active" : ""} onClick={() => setPage("actionBoard")}>Action Board</button>
-          <button className={page === "meeting" ? "active" : ""} onClick={() => setPage("meeting")}>Meeting Copilot</button>
-          <button className={page === "portfolio" ? "active" : ""} onClick={() => setPage("portfolio")}>Portfolio Intelligence</button>
-          <button className={page === "gateway" ? "active" : ""} onClick={() => setPage("gateway")}>Audit &amp; Safety</button>
+          <button className={page === "cockpit" ? "active" : ""} onClick={() => setPage("cockpit")}>AI 驾驶舱</button>
+          <button className={page === "risk" ? "active" : ""} onClick={() => setPage("risk")}>风险与优先级</button>
+          <button className={page === "detail" ? "active" : ""} onClick={() => setPage("detail")}>商机 360</button>
+          <button className={page === "actionBoard" ? "active" : ""} onClick={() => setPage("actionBoard")}>行动看板</button>
+          <button className={page === "meeting" ? "active" : ""} onClick={() => setPage("meeting")}>会议副驾</button>
+          <button className={page === "portfolio" ? "active" : ""} onClick={() => setPage("portfolio")}>组合洞察</button>
+          <button className={page === "gateway" ? "active" : ""} onClick={() => setPage("gateway")}>审计与安全</button>
         </nav>
         <div className="topbar-utility">
-          <LanguageSwitcher language={language} onChange={setLanguage} t={t} />
+          <span className="demo-access-badge">演示全权限</span>
           <span className={transform?.blocked ? "status danger" : "status"}>{status}</span>
         </div>
       </header>
       <ProviderSafetyStrip status={providerStatus} />
       <DecisionContextBar
+        amountDisplayMode={amountDisplayMode}
         catalog={decisionCatalog}
         mode={decisionMode}
         onModeChange={changeDecisionMode}
+        onAmountDisplayModeChange={changeAmountDisplayMode}
         onOpportunityChange={changeDecisionOpportunity}
         onReset={resetDecisionPortfolio}
         onScenarioChange={changeDecisionScenario}
@@ -474,7 +488,7 @@ export default function App() {
       />
 
       {(["cockpit", "risk", "detail", "actionBoard", "meeting", "portfolio"] as DecisionPage[]).includes(page as DecisionPage) ? (
-        <DecisionWorkspace page={page as DecisionPage} view={decisionView} loading={decisionLoading} error={decisionError} onRetry={() => loadDecisionView()} />
+        <DecisionWorkspace amountDisplayMode={amountDisplayMode} page={page as DecisionPage} view={decisionView} loading={decisionLoading} error={decisionError} onRetry={() => loadDecisionView()} onOpportunityChange={changeDecisionOpportunity} />
       ) : page === "opportunities" ? (
         <OpportunityListPage
           dashboard={dashboard}

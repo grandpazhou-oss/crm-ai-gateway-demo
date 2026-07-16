@@ -802,7 +802,7 @@ test("main navigation follows the decision workflow and keeps legacy AI lab off 
   const mainSource = await readFile(mainTsxFile, "utf8");
   assert.equal(mainSource.includes('window.location.pathname === "/design-preview"'), true);
   const navSource = appSource.slice(appSource.indexOf('<nav className="tabs">'), appSource.indexOf("</nav>"));
-  const navOrder = ["AI Cockpit", "Risk &amp; Priority", "Opportunity 360", "Action Board", "Meeting Copilot", "Portfolio Intelligence", "Audit &amp; Safety"];
+  const navOrder = ["AI 驾驶舱", "风险与优先级", "商机 360", "行动看板", "会议副驾", "组合洞察", "审计与安全"];
   for (let index = 0; index < navOrder.length - 1; index += 1) {
     assert.equal(navSource.indexOf(navOrder[index]) < navSource.indexOf(navOrder[index + 1]), true, `${navOrder[index]} before ${navOrder[index + 1]}`);
   }

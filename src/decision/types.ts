@@ -1,6 +1,7 @@
 import type { UnifiedAiOutput } from "./contract";
 
 export type DecisionMode = "portfolio" | "scenario";
+export type AmountDisplayMode = "range" | "exact";
 
 export type DecisionScenarioDescriptor = {
   id: string;
