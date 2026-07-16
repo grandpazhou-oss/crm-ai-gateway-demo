@@ -2,12 +2,13 @@ const PRIORITY_LABELS: Record<string, string> = {
   Critical: "严重",
   High: "高风险",
   Medium: "中等",
+  Low: "低风险",
   Monitor: "正常监测",
 };
 
 const STAGE_LABELS: Record<string, string> = {
   Qualify: "授予资格",
-  Develop: "推进中",
+  Develop: "开发中",
   Propose: "提案中",
   Close: "案件关闭",
 };
@@ -137,7 +138,7 @@ const DECISION_TEXT: Record<string, string> = {
   "Critical": "严重",
   "High": "高风险",
   "Medium": "中等",
-  "Low": "低",
+  "Low": "低风险",
   "clear": "正常",
   "none": "无",
   "review": "待复核",
@@ -181,6 +182,35 @@ const DECISION_TEXT: Record<string, string> = {
   "待人工确定": "待人工确定",
 };
 
+const TECHNICAL_SIGNAL_LABELS: Record<string, string> = {
+  "missing-decision-maker": "关键决策人尚未覆盖",
+  "forecast-progress-conflict": "预测阶段与实际推进状态不一致",
+};
+
+const BUSINESS_SOURCE_LABELS: Record<string, string> = {
+  "safeContext.priority": "优先级来源：CRM 脱敏字段",
+  "safeContext.stagnationBand": "推进状态来源：阶段停留与跟进频率",
+  "safeContext.dataQualityCodes": "数据质量来源：CRM 脱敏质量信号",
+};
+
 export function decisionText(value: string) {
-  return DECISION_TEXT[value] || value;
+  if (DECISION_TEXT[value]) return DECISION_TEXT[value];
+  if (TECHNICAL_SIGNAL_LABELS[value]) return TECHNICAL_SIGNAL_LABELS[value];
+  const signals = value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (signals.length > 1 && signals.every(isTechnicalSignal)) {
+    return signals.map((item) => TECHNICAL_SIGNAL_LABELS[item] || "未映射的安全信号").join("、");
+  }
+  return isTechnicalSignal(value) ? "未映射的安全信号" : value;
+}
+
+export function businessSourceLabel(source: string) {
+  if (BUSINESS_SOURCE_LABELS[source]) return BUSINESS_SOURCE_LABELS[source];
+  if (source.startsWith("safeAggregate.")) return "来源：CRM 安全聚合指标";
+  if (source.startsWith("safeContext.")) return "来源：CRM 安全派生信号";
+  return "来源：安全决策输出";
+}
+
+function isTechnicalSignal(value: string) {
+  return /^safe(?:Context|Aggregate)\.[A-Za-z0-9.]+$/.test(value)
+    || /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/.test(value);
 }

@@ -58,7 +58,7 @@ test("product model keeps actions source-bound and scope labels explicit", async
   assert.equal(action.due, "待人工确定");
   assert.equal(action.status, "待人工确定");
   assert.deepEqual(model.sortedRiskOpportunities(view).map((item) => item.opportunityToken), ["C", "A", "B"]);
-  assert.deepEqual(model.portfolioScope(view), { modeLabel: "场景聚焦", scenarioLabel: "Risk focus", scopeLabel: "Scenario Scope", count: 12, completeLabel: "场景筛选范围" });
+  assert.deepEqual(model.portfolioScope(view), { modeLabel: "场景聚焦", scenarioLabel: "Risk focus", scopeLabel: "场景范围", count: 12, completeLabel: "场景筛选范围" });
   assert.equal(model.canonicalJson({ z: 1, a: { y: 2, x: [3, 1] } }), '{"a":{"x":[3,1],"y":2},"z":1}');
 });
 

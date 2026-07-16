@@ -53,8 +53,8 @@ test("formal UI reserves external model status, DA-02, DA-07, and comparison wit
   assert.match(workspace, /templateId="DA-02"/);
   assert.match(workspace, /templateId="DA-07"/);
   assert.match(workspace, /Timeline 原文发送模型<\/dt><dd>否/);
-  for (const label of ["Schema Validation", "Safety Validation", "Citation Validation", "Latency", "情报模式"]) assert.match(workspace, new RegExp(label));
-  assert.match(audit, /模型与 Provider/);
+  for (const label of ["输出结构校验", "安全校验", "引用校验", "响应耗时", "情报模式"]) assert.match(workspace, new RegExp(label));
+  assert.match(audit, /模型与模型提供方/);
   assert.match(audit, /模型对比/);
   assert.match(audit, /外部模型对比尚未启用，完成安全授权和 Provider 配置后开放。/);
   assert.doesNotMatch(`${app}\n${workspace}\n${audit}`, /confirmAndRun|runExternal|callExternal|POST|PATCH/);
@@ -62,7 +62,7 @@ test("formal UI reserves external model status, DA-02, DA-07, and comparison wit
 
 test("Audit configuration remains status-only and comparison controls are disabled", async () => {
   const audit = await readFile(new URL("../src/decision/AuditSafetyPage.tsx", import.meta.url), "utf8");
-  for (const label of ["Base URL", "API Key", "外部调用授权", "Timeout", "Retry Policy", "Max Response", "JSON Schema", "最近连接检查"]) assert.match(audit, new RegExp(label));
+  for (const label of ["服务地址配置", "访问密钥配置", "外部调用授权", "请求超时", "重试策略", "最大响应", "输出结构版本", "最近连接检查"]) assert.match(audit, new RegExp(label));
   assert.match(audit, /<select disabled>/);
   assert.match(audit, /页面加载、导航和筛选变化均不会自动调用模型/);
   assert.doesNotMatch(audit, /LLM_API_KEY|process\.env|authorization|完整 Safe Context|JSON\.stringify\(view\.safeContext\)/);

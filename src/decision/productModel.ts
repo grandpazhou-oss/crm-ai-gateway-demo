@@ -21,6 +21,10 @@ export type ProductAction = {
   priority: string;
   evidenceCount: number;
   sourcePage: string;
+  ownerSource: string;
+  dueSource: string;
+  statusSource: string;
+  reasonSource: string;
 };
 
 export function productActions(view: DecisionView): ProductAction[] {
@@ -47,6 +51,10 @@ export function productActions(view: DecisionView): ProductAction[] {
         priority: output.priority,
         evidenceCount: output.evidence.length,
         sourcePage,
+        ownerSource: action.owner && action.owner !== "Owner token" ? "来源：模型建议" : "待人工指定",
+        dueSource: action.due ? "来源：模型建议（非 CRM 正式期限）" : "待人工确定",
+        statusSource: action.status === "Draft only" ? "仅草案" : action.status ? "来源：模型建议" : "待人工确定",
+        reasonSource: action.reason ? "来源：模型建议" : "来源：CRM 安全派生信号",
       });
     });
   }
@@ -58,9 +66,9 @@ export function portfolioScope(view: DecisionView) {
   return {
     modeLabel: isComplete ? "组合视图" : "场景聚焦",
     scenarioLabel: view.scenario?.title || "全部本地组合",
-    scopeLabel: isComplete ? "Portfolio Scope" : "Scenario Scope",
+    scopeLabel: isComplete ? "组合范围" : "场景范围",
     count: view.scopeSummary.scopeCount,
-    completeLabel: isComplete ? "完整本地 Portfolio" : "场景筛选范围",
+    completeLabel: isComplete ? "完整本地组合" : "场景筛选范围",
   };
 }
 

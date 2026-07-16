@@ -1,7 +1,7 @@
 import type { AiProviderStatus } from "../types";
 import { PRODUCT_FEATURES } from "../config/features";
 import type { UnifiedAiOutput } from "./contract";
-import { booleanLabel, decisionText, fallbackReasonLabel, maskOpportunityToken, priorityLabel, scenarioTitle, stageLabel } from "./display";
+import { booleanLabel, businessSourceLabel, decisionText, fallbackReasonLabel, maskOpportunityToken, priorityLabel, scenarioTitle, stageLabel } from "./display";
 import { externalAnalysisStatus, externalAnalysisStatusLabel } from "./externalModelUi";
 import type { AmountDisplayMode, DecisionMode, DecisionScenarioCatalog, DecisionView } from "./types";
 
@@ -9,8 +9,9 @@ export function ProviderSafetyStrip({ status, operationStatus = "" }: { status: 
   const externalStatus = externalAnalysisStatus(status);
   return (
     <section className="provider-safety-strip compact" aria-label="模型和安全状态">
-      <strong>{status?.provider || "demo"} Provider</strong><span aria-hidden="true">·</span>
+      <strong>当前模型：{status?.provider || "demo"}</strong><span aria-hidden="true">·</span>
       <span>Safe Context 已启用</span><span aria-hidden="true">·</span>
+      <span>外部模型未调用</span><span aria-hidden="true">·</span>
       <span className={`external-status status-${externalStatus}`}>{externalAnalysisStatusLabel(status, true)}</span><span aria-hidden="true">·</span>
       <span>原始数据{status?.rawDataSent ? "已阻断" : "未外发"}</span><span aria-hidden="true">·</span>
       <span>只读</span><span className="operation-status" aria-live="polite">{operationStatus}</span>
@@ -63,11 +64,11 @@ export function ProductStatusPanel({ kind, title, message }: { kind: "loading" |
 }
 
 export function FactList({ output }: { output: UnifiedAiOutput }) {
-  return <section className="product-fact-list"><h3>当前 CRM 事实</h3>{output.fact.map((item) => <dl key={`${item.label}-${item.value}`}><dt>{decisionText(item.label)}</dt><dd>{decisionText(item.value)}</dd></dl>)}{!output.fact.length ? <p className="empty-copy">当前范围没有可用的安全事实。</p> : null}</section>;
+  return <section className="product-fact-list"><h3>当前 CRM 事实</h3>{output.fact.map((item) => <dl key={`${item.label}-${item.value}`}><dt>{decisionText(item.label)}</dt><dd>{decisionText(item.value)}<small>{businessSourceLabel(item.source)}</small></dd></dl>)}{!output.fact.length ? <p className="empty-copy">当前范围没有可用的安全事实。</p> : null}</section>;
 }
 
 export function EvidenceList({ output }: { output: UnifiedAiOutput }) {
-  return <section className="product-evidence-list"><h3>核心证据</h3>{output.evidence.map((item) => <div key={`${item.label}-${item.value}`}><span>{decisionText(item.label)}</span><strong>{decisionText(item.value)}</strong></div>)}{!output.evidence.length ? <p className="empty-copy">当前没有可追溯证据。</p> : null}</section>;
+  return <section className="product-evidence-list"><h3>核心证据</h3>{output.evidence.map((item) => <div key={`${item.label}-${item.value}`}><span>{decisionText(item.label)}</span><strong>{decisionText(item.value)}</strong><small>{businessSourceLabel(item.source)}</small></div>)}{!output.evidence.length ? <p className="empty-copy">当前没有可追溯证据。</p> : null}</section>;
 }
 
 export function InferencePanel({ output }: { output: UnifiedAiOutput }) {
