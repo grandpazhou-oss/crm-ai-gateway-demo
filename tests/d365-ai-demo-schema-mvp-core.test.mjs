@@ -89,3 +89,9 @@ test("Required relationship and alternate-key scope has no activity hard relatio
     ["aigw_interactiontoken"],
   ]);
 });
+
+test("Solution membership verifies entity-root subcomponents without guessing direct IDs", () => {
+  assert.match(source, /rootcomponentbehavior/);
+  assert.match(source, /entity-root-subcomponent/);
+  assert.match(source, /Number\(root\.rootcomponentbehavior\) !== 0/);
+});

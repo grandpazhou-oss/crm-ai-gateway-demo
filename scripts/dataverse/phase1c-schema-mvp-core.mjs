@@ -566,7 +566,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env, cl
     }
 
     const solutionId = solution.solutionid;
-    const componentRows = async () => getAll(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,objectid,componenttype&$filter=_solutionid_value eq ${solutionId}`);
+    const componentRows = async () => getAll(`/api/data/v9.2/solutioncomponents?$select=solutioncomponentid,objectid,componenttype,rootcomponentbehavior,rootsolutioncomponentid&$filter=_solutionid_value eq ${solutionId}`);
     const ensureComponent = async (objectId, componentType, label) => {
       const rows = await componentRows();
       const present = rows.find((row) => Number(row.componenttype) === componentType && normalizeId(row.objectid) === normalizeId(objectId));
@@ -577,10 +577,32 @@ export async function main({ argv = process.argv.slice(2), env = process.env, cl
       audit.created.solutionComponents.push({ label, componentType, objectId });
       await persist();
     };
+    const recordEntitySubcomponent = (objectId, componentType, label, root) => {
+      audit.existing.solutionComponents.push({
+        label,
+        componentType,
+        objectId,
+        source: "entity-root-subcomponent",
+        rootObjectId: root.objectid,
+        rootComponentBehavior: root.rootcomponentbehavior,
+      });
+    };
     const coverage = await readEntity("aigw_customerservicecoverage");
     const signal = await readEntity("aigw_interactionsignal");
     await ensureComponent(coverage.MetadataId, SOLUTION_COMPONENT_TYPES.entity, "aigw_customerservicecoverage");
     await ensureComponent(signal.MetadataId, SOLUTION_COMPONENT_TYPES.entity, "aigw_interactionsignal");
+    const solutionComponentsAfterRoots = await componentRows();
+    const entityRoots = new Map(
+      solutionComponentsAfterRoots
+        .filter((row) => Number(row.componenttype) === SOLUTION_COMPONENT_TYPES.entity)
+        .map((row) => [normalizeId(row.objectid), row]),
+    );
+    for (const entity of [coverage, signal]) {
+      const root = entityRoots.get(normalizeId(entity.MetadataId));
+      if (!root || Number(root.rootcomponentbehavior) !== 0) {
+        throw new Error(`Solution root for ${entity.LogicalName} is missing or does not include subcomponents.`);
+      }
+    }
     const finalOpportunityAttrs = await readGenericAttributes("opportunity");
     const approvedOpportunityAttributeNames = new Set((manifestEntities.opportunity.fields || []).map((field) => field.logicalName));
     for (const attr of finalOpportunityAttrs) {
@@ -591,9 +613,27 @@ export async function main({ argv = process.argv.slice(2), env = process.env, cl
     for (const relation of RELATIONSHIPS) {
       const row = relationRows.find((item) => lower(item.SchemaName) === lower(relation.schemaName));
       if (!row) throw new Error(`Relationship readback failed before solution membership: ${relation.schemaName}`);
-      await ensureComponent(row.MetadataId, SOLUTION_COMPONENT_TYPES.relationship, relation.schemaName);
+      const rows = await componentRows();
+      const direct = rows.find((item) => Number(item.componenttype) === SOLUTION_COMPONENT_TYPES.relationship && normalizeId(item.objectid) === normalizeId(row.MetadataId));
+      if (direct) {
+        audit.existing.solutionComponents.push({ label: relation.schemaName, componentType: SOLUTION_COMPONENT_TYPES.relationship, objectId: row.MetadataId, source: "direct" });
+      } else {
+        const root = entityRoots.get(normalizeId(row.ReferencingEntity === coverage.LogicalName ? coverage.MetadataId : signal.MetadataId));
+        if (!root || Number(root.rootcomponentbehavior) !== 0) throw new Error(`Solution membership for relationship ${relation.schemaName} is not directly present and is not covered by an entity root.`);
+        recordEntitySubcomponent(row.MetadataId, SOLUTION_COMPONENT_TYPES.relationship, relation.schemaName, root);
+      }
     }
-    for (const key of audit.keys) await ensureComponent(key.metadataId, SOLUTION_COMPONENT_TYPES.key, key.schemaName);
+    for (const key of audit.keys) {
+      const rows = await componentRows();
+      const direct = rows.find((item) => Number(item.componenttype) === SOLUTION_COMPONENT_TYPES.key && normalizeId(item.objectid) === normalizeId(key.metadataId));
+      if (direct) {
+        audit.existing.solutionComponents.push({ label: key.schemaName, componentType: SOLUTION_COMPONENT_TYPES.key, objectId: key.metadataId, source: "direct" });
+      } else {
+        const root = entityRoots.get(normalizeId(key.entity === coverage.LogicalName ? coverage.MetadataId : signal.MetadataId));
+        if (!root || Number(root.rootcomponentbehavior) !== 0) throw new Error(`Solution membership for alternate key ${key.schemaName} is not directly present and is not covered by an entity root.`);
+        recordEntitySubcomponent(key.metadataId, SOLUTION_COMPONENT_TYPES.key, key.schemaName, root);
+      }
+    }
     audit.gates["Solution Components Ready"] = true;
     audit.gates["Choice Metadata Ready"] = true;
     audit.gates["Relationships Ready"] = audit.relationships.length === RELATIONSHIPS.length;
