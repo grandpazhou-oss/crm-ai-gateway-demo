@@ -669,45 +669,17 @@ test("design preview route uses static safe data without replacing the formal ap
 test("formal cockpit is action-first command center and keeps design preview separate", async () => {
   const appSource = await readFile(mainTsxFile, "utf8");
   const source = await readFile(path.resolve("src/App.tsx"), "utf8");
-  const zhSource = await readFile(path.resolve("src/i18n/locales/zh-CN.ts"), "utf8");
   assert.equal(appSource.includes('window.location.pathname === "/design-preview"'), true);
-  for (const key of [
-    "cockpit.executiveSummary",
-    "cockpit.attentionQueue",
-    "cockpit.whyItMatters",
-    "cockpit.recommendedActions",
-    "cockpit.departmentDistribution",
-    "cockpit.stageDistribution",
-    "common.rawCrmDataNotSent",
-  ]) {
-    assert.equal(source.includes(`t("${key}")`) || zhSource.includes(`"${key}"`), true, key);
-  }
-  for (const field of ["finding", "reason", "evidence", "action", "owner", "urgency", "safety"]) {
-    assert.equal(source.includes(field), true, field);
-  }
-  assert.equal(source.includes("buildAttentionItems"), true);
-  assert.equal(source.includes("attentionBadgeWeights"), true);
+  for (const label of ["AI 驾驶舱", "风险与优先级", "行动看板", "审计与安全"]) assert.equal(source.includes(label), true, label);
+  assert.equal(source.includes("DecisionWorkspace"), true);
+  assert.equal(source.includes("ProviderSafetyStrip"), true);
+  assert.equal(source.includes("InternalAiLab"), false);
 });
 
 test("opportunity filters replace legacy executive dashboard filters", async () => {
   const source = await readFile(path.resolve("src/App.tsx"), "utf8");
-  const filterSource = source.slice(source.indexOf("function FilterBar"), source.indexOf("function KpiHeroCard"));
-  const zhSource = await readFile(path.resolve("src/i18n/locales/zh-CN.ts"), "utf8");
-  for (const keyOrLabel of [
-    "filters.title",
-    "[AI-DEMO] only",
-    "filters.filteredOpportunities",
-    "filters.stage",
-    "filters.riskLevel",
-    "filters.salesDepartment",
-    "filters.bookingDepartment",
-    "filters.customerNeed",
-    "filters.proposalContent",
-    "filters.winProbability",
-    "filters.ownerToken",
-  ]) {
-    assert.equal(filterSource.includes(keyOrLabel) || zhSource.includes(`"${keyOrLabel}"`), true, keyOrLabel);
-  }
+  const filterSource = await readFile(path.resolve("src/decision/DecisionUi.tsx"), "utf8");
+  for (const label of ["部门", "分析视角", "分析场景", "脱敏商机", "金额显示", "重置"]) assert.equal(filterSource.includes(label), true, label);
   for (const legacyLabel of ["Executive Filters", "Business Segment", "Trade Lane", "Customer Tier", "Forecast Category"]) {
     assert.equal(filterSource.includes(legacyLabel), false, legacyLabel);
   }
@@ -721,7 +693,7 @@ test("frontend i18n has complete zh ja en dictionaries and language switcher", a
   const zhSource = await readFile(path.resolve("src/i18n/locales/zh-CN.ts"), "utf8");
   const jaSource = await readFile(path.resolve("src/i18n/locales/ja-JP.ts"), "utf8");
   const enSource = await readFile(path.resolve("src/i18n/locales/en-US.ts"), "utf8");
-  const appSource = await readFile(path.resolve("src/App.tsx"), "utf8");
+  const appSource = await readFile(path.resolve("src/internal/InternalAiLab.tsx"), "utf8");
   assert.equal(i18nSource.includes("localStorage"), true);
   assert.equal(i18nSource.includes("zh-CN"), true);
   assert.equal(i18nSource.includes("ja-JP"), true);
@@ -750,7 +722,7 @@ test("frontend i18n has complete zh ja en dictionaries and language switcher", a
 });
 
 test("Deal Brief exposes only a single-record manual External AI entry", async () => {
-  const appSource = await readFile(path.resolve("src/App.tsx"), "utf8");
+  const appSource = await readFile(path.resolve("src/internal/InternalAiLab.tsx"), "utf8");
   const apiSource = await readFile(path.resolve("src/api.ts"), "utf8");
   const zhSource = await readFile(path.resolve("src/i18n/locales/zh-CN.ts"), "utf8");
   const jaSource = await readFile(path.resolve("src/i18n/locales/ja-JP.ts"), "utf8");
@@ -778,57 +750,28 @@ test("Deal Brief exposes only a single-record manual External AI entry", async (
 
 test("risk radar page is available without replacing formal app or design preview", async () => {
   const appSource = await readFile(path.resolve("src/App.tsx"), "utf8");
+  const workspaceSource = await readFile(path.resolve("src/decision/DecisionWorkspace.tsx"), "utf8");
+  const uiSource = await readFile(path.resolve("src/decision/DecisionUi.tsx"), "utf8");
   const mainSource = await readFile(mainTsxFile, "utf8");
   assert.equal(mainSource.includes('window.location.pathname === "/design-preview"'), true);
-  for (const key of [
-    "riskRadar.title",
-    "riskRadar.driverSummary",
-    "riskRadar.matrix",
-    "riskRadar.topRiskCases",
-    "riskRadar.evidencePanel",
-    "riskRadar.recommendedMitigation",
-    "riskRadar.description",
-    "common.rawCrmDataNotSent",
-    "common.noCrmWriteBack",
-  ]) {
-    assert.equal(appSource.includes(`t("${key}")`), true, key);
-  }
-  assert.equal(appSource.includes("RiskRadarPage"), true);
-  assert.equal(appSource.includes('page === "risk"'), true);
+  for (const label of ["风险与优先级", "风险复核队列", "AI 综合判断", "核心证据"]) assert.equal(`${appSource}\n${workspaceSource}\n${uiSource}`.includes(label), true, label);
+  assert.equal(workspaceSource.includes("RiskPage"), true);
+  assert.equal(workspaceSource.includes('page === "risk"'), true);
 });
 
 test("main navigation follows the decision workflow and keeps legacy AI lab off the primary path", async () => {
   const appSource = await readFile(path.resolve("src/App.tsx"), "utf8");
   const mainSource = await readFile(mainTsxFile, "utf8");
   assert.equal(mainSource.includes('window.location.pathname === "/design-preview"'), true);
-  const navSource = appSource.slice(appSource.indexOf('<nav className="tabs">'), appSource.indexOf("</nav>"));
+  const navSource = appSource.slice(appSource.indexOf("const NAVIGATION"), appSource.indexOf("export default function App"));
   const navOrder = ["AI 驾驶舱", "风险与优先级", "商机 360", "行动看板", "会议副驾", "组合洞察", "审计与安全"];
   for (let index = 0; index < navOrder.length - 1; index += 1) {
     assert.equal(navSource.indexOf(navOrder[index]) < navSource.indexOf(navOrder[index + 1]), true, `${navOrder[index]} before ${navOrder[index + 1]}`);
   }
-  for (const keyOrLabel of [
-    "actionBoard.summary",
-    "actionBoard.ownerBoard",
-    "actionBoard.actionTypeGroups",
-    "actionBoard.priorityRank",
-    "actionBoard.suggestedDraft",
-    "actionBoard.draftOnly",
-    "actionBoard.ownerTokenized",
-    "Legacy Prototype",
-  ]) {
-    assert.equal(appSource.includes(keyOrLabel), true, keyOrLabel);
-  }
-  assert.equal(appSource.includes("ActionBoardPage"), true);
-  assert.equal(appSource.includes('page === "actionBoard"'), true);
+  assert.equal(appSource.includes("DecisionWorkspace"), true);
   assert.equal(appSource.includes(">AI Sales Actions<"), false);
-  assert.equal(appSource.includes('t("nav.aiLab")'), true);
-  assert.equal(navSource.includes('t("nav.aiLab")'), false);
-  assert.equal(appSource.includes("common.safeContextOnly"), true);
-  assert.equal(appSource.includes("common.rawCrmDataNotSent"), true);
-  assert.equal(appSource.includes("common.noCrmWriteBack"), true);
-  assert.equal(appSource.includes("dealBrief.safeProgress"), true);
-  assert.equal(appSource.includes("sanitizedDescription"), true);
-  assert.equal(appSource.includes("sanitizedProgressSummary"), true);
+  assert.equal(navSource.includes("AI Lab"), false);
+  assert.equal(appSource.includes("InternalAiLab"), false);
 });
 
 test("management summary is Chinese and generated from safe aggregate payload", async () => {

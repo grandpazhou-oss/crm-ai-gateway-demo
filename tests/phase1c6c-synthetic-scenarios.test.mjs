@@ -141,7 +141,7 @@ test("Golden metadata is test-only and cannot be imported by runtime source", as
   const appSource = await readFile("src/App.tsx", "utf8");
   const apiSource = await readFile("src/api.ts", "utf8");
   assert.match(appSource, /DecisionWorkspace/);
-  assert.match(appSource, /resetDecisionPortfolio/);
+  assert.match(appSource, /resetPortfolio/);
   assert.match(apiSource, /getDecisionScenarios/);
   assert.match(apiSource, /getDecisionView/);
 });

@@ -18,7 +18,7 @@ test("6E does not fabricate department values and keeps exact amount session-onl
   const app = await readFile(appPath, "utf8");
   const ui = await readFile(uiPath, "utf8");
   assert.match(ui, /CRM 部门字段待接入/);
-  assert.match(ui, /select disabled value="all-authorized"/);
+  assert.match(ui, /select disabled value="pending"/);
   assert.match(app, /useState<AmountDisplayMode>\("range"\)/);
   assert.match(app, /window\.confirm\("精确金额仅在当前受控界面展示，不会发送给外部模型。"\)/);
   assert.doesNotMatch(`${app}\n${ui}`, /localStorage|sessionStorage|URLSearchParams/);
@@ -28,10 +28,10 @@ test("6E masks opportunity identity and presents the three-column decision chain
   const display = await readFile(displayPath, "utf8");
   const workspace = await readFile(workspacePath, "utf8");
   assert.match(display, /SAFE-OPP-/);
-  for (const className of ["risk-queue", "decision-chain", "decision-context-rail"]) assert.match(workspace, new RegExp(className));
-  assert.match(workspace, /客户历史事实/);
+  for (const className of ["risk-queue", "opportunity-decision-grid", "decision-context-rail"]) assert.match(workspace, new RegExp(className));
+  assert.match(workspace, /客户历史尚未接入/);
   assert.match(workspace, /外部事实/);
-  assert.match(workspace, /精确金额发送<\/dt><dd>否/);
+  assert.match(workspace, /精确金额发送模型<\/dt><dd>否/);
 });
 
 test("6E responsive rules cover desktop, compact desktop, and narrow viewport", async () => {

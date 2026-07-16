@@ -1,6 +1,6 @@
 import type { AiActionName, AiActionResult, AiDemoChatResult, AiProviderStatus, AiResult, AuditEntry, DashboardFilters, DynamicsStatus, ManagementDashboard, Opportunity, Role, TransformResult } from "./types";
 import { DEFAULT_LANGUAGE } from "./config/language";
-import type { DecisionMode, DecisionScenarioCatalog, DecisionView } from "./decision/types";
+import type { DecisionMode, DecisionOpportunityDetail, DecisionScenarioCatalog, DecisionView } from "./decision/types";
 
 async function json<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -90,4 +90,10 @@ export function getDecisionView(mode: DecisionMode, scenarioId = "", opportunity
   if (scenarioId) params.set("scenarioId", scenarioId);
   if (opportunityToken) params.set("opportunityToken", opportunityToken);
   return json<{ data: DecisionView }>(`/api/decision-view?${params.toString()}`);
+}
+
+export function getDecisionOpportunity(opportunityToken: string, mode: DecisionMode, scenarioId = "", signal?: AbortSignal) {
+  const params = new URLSearchParams({ mode });
+  if (scenarioId) params.set("scenarioId", scenarioId);
+  return json<{ data: DecisionOpportunityDetail }>(`/api/decision-opportunities/${encodeURIComponent(opportunityToken)}?${params.toString()}`, { signal });
 }

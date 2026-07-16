@@ -71,6 +71,14 @@ export type DecisionView = {
   pack: ScenarioDecisionPack;
 };
 
+export type DecisionOpportunityDetail = {
+  mode: DecisionMode;
+  scenario: DecisionScenarioDescriptor | null;
+  safeContext: SafeDecisionContext;
+  accountAggregate: SafeAccountAggregate;
+  opportunity360: UnifiedAiOutput;
+};
+
 export type DecisionScenarioCatalog = {
   defaultMode: DecisionMode;
   portfolioDefaultOpportunity: string;
