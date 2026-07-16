@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { buildAiDemoContext, buildProviderContext } from "./ai/contextBuilder.mjs";
 import { runAiAction } from "./ai/actionService.mjs";
 import { runAi, runAiDemoChat } from "./ai/aiService.mjs";
+import { createDeepAnalysisService } from "./ai/deepAnalysis/deepAnalysisService.mjs";
 import { resolveProviderStatus } from "./ai/providers/providerRouter.mjs";
 import { createDynamicsClient } from "./dynamicsClient.mjs";
 import { createJsonStore, createOpportunityStore } from "./store.mjs";
@@ -36,6 +37,7 @@ export function createApp({
 } = {}) {
   const app = express();
   const comparisonHarness = createComparisonHarness({ env, fetchImpl, now });
+  const deepAnalysis = createDeepAnalysisService({ env, now });
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/api/opportunities", async (_request, response) => {
@@ -101,6 +103,33 @@ export function createApp({
   app.post("/api/decision-comparison/reset", (_request, response) => {
     comparisonHarness.reset();
     response.json({ ok: true });
+  });
+
+  app.get("/api/deep-analysis/templates", (_request, response) => {
+    response.json({ data: deepAnalysis.templates() });
+  });
+
+  app.post("/api/deep-analysis/preview", (request, response) => {
+    try { return response.json({ data: deepAnalysis.preview(request.body || {}) }); }
+    catch (error) { return response.status(error?.status || 400).json({ error: error instanceof Error ? error.message : "Deep analysis preview failed" }); }
+  });
+
+  app.post("/api/deep-analysis/run", async (request, response) => {
+    try { return response.json({ data: await deepAnalysis.run(request.body || {}) }); }
+    catch (error) { return response.status(error?.status || 400).json({ error: error instanceof Error ? error.message : "Deep analysis failed" }); }
+  });
+
+  app.post("/api/deep-analysis/:requestId/cancel", (request, response) => {
+    response.json({ ok: deepAnalysis.cancel(request.params.requestId) });
+  });
+
+  app.delete("/api/deep-analysis/results", (_request, response) => {
+    deepAnalysis.reset();
+    response.json({ ok: true });
+  });
+
+  app.get("/api/deep-analysis/audit", (_request, response) => {
+    response.json({ data: deepAnalysis.listAudit() });
   });
 
   app.get("/api/dynamics/status", (_request, response) => {

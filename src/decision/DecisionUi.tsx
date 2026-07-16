@@ -53,10 +53,10 @@ export function ExternalModelReadiness({ status, latestAnalysis = "当前审计�
   return <section className={`external-readiness-banner status-${state}`} aria-label="外部模型可用性"><div><span>外部模型可用性</span><strong>{externalAnalysisStatusLabel(status)}</strong></div><dl><dt>最近深度分析</dt><dd>{latestAnalysis}</dd><dt>自动调用</dt><dd>禁用</dd></dl></section>;
 }
 
-export function DeepAnalysisReservation({ status, templateId, title }: { status: AiProviderStatus | null; templateId: string; title: string }) {
+export function DeepAnalysisReservation({ status, templateId, title, onOpen }: { status: AiProviderStatus | null; templateId: string; title: string; onOpen?: () => void }) {
   const state = externalAnalysisStatus(status);
   const descriptionId = `deep-analysis-${templateId.toLowerCase()}`;
-  return <section className={`deep-analysis-reservation status-${state}`} aria-label={`${title}深度分析预留`}><div><span>{templateId}</span><h3>{title}</h3><p id={descriptionId}>深度分析尚未启用。完成外部模型授权、客户历史安全聚合和调用确认流程后开放。</p></div><button disabled={!PRODUCT_FEATURES.deepAnalysis} aria-describedby={descriptionId}>进行深度分析</button></section>;
+  return <section className={`deep-analysis-reservation status-${state}`} aria-label={`${title}深度分析预留`}><div><span>{templateId}</span><h3>{title}</h3><p id={descriptionId}>{PRODUCT_FEATURES.deepAnalysis ? "使用当前 Safe Context 进入受控 Demo 深度分析；运行前必须确认范围。" : "深度分析尚未启用。完成受控功能授权和调用确认流程后开放。"}</p></div><button disabled={!PRODUCT_FEATURES.deepAnalysis} aria-describedby={descriptionId} onClick={onOpen}>进行深度分析</button></section>;
 }
 
 export function ProductStatusPanel({ kind, title, message }: { kind: "loading" | "empty" | "error" | "blocked" | "fallback"; title: string; message: string }) {

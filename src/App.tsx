@@ -4,10 +4,12 @@ import { AuditSafetyPage } from "./decision/AuditSafetyPage";
 import { DecisionContextBar, ProviderSafetyStrip } from "./decision/DecisionUi";
 import { DecisionWorkspace, type DecisionPage } from "./decision/DecisionWorkspace";
 import { scenarioTitle } from "./decision/display";
+import { DeepAnalysisPage } from "./deepAnalysis/DeepAnalysisPage";
+import { PRODUCT_FEATURES } from "./config/features";
 import type { AmountDisplayMode, DecisionMode, DecisionScenarioCatalog, DecisionView } from "./decision/types";
 import type { AiProviderStatus, AuditEntry } from "./types";
 
-type ProductPage = DecisionPage | "gateway";
+type ProductPage = DecisionPage | "gateway" | "deepAnalysis";
 
 const NAVIGATION: Array<{ page: ProductPage; label: string }> = [
   { page: "cockpit", label: "AI 驾驶舱" },
@@ -17,6 +19,7 @@ const NAVIGATION: Array<{ page: ProductPage; label: string }> = [
   { page: "meeting", label: "会议副驾" },
   { page: "portfolio", label: "组合洞察" },
   { page: "gateway", label: "审计与安全" },
+  ...(PRODUCT_FEATURES.deepAnalysis ? [{ page: "deepAnalysis" as const, label: "深度分析" }] : []),
 ];
 
 export default function App() {
@@ -100,7 +103,7 @@ export default function App() {
     <main className="app product-app">
       <header className="topbar product-topbar">
         <div className="gateway-brand"><p>CRM AI 安全决策工作台</p><h1>CRM AI Gateway</h1></div>
-        <nav className="tabs" aria-label="主导航">
+        <nav className={`tabs${PRODUCT_FEATURES.deepAnalysis ? " with-deep-analysis" : ""}`} aria-label="主导航">
           {NAVIGATION.map((item) => <button key={item.page} className={page === item.page ? "active" : ""} onClick={() => setPage(item.page)}>{item.label}</button>)}
         </nav>
         <div className="topbar-utility"><span className="demo-access-badge">演示全权限</span></div>
@@ -122,6 +125,8 @@ export default function App() {
 
       {page === "gateway" ? (
         <AuditSafetyPage amountDisplayMode={amountDisplayMode} auditLog={auditLog} catalog={catalog} providerStatus={providerStatus} view={view} />
+      ) : page === "deepAnalysis" ? (
+        <DeepAnalysisPage amountDisplayMode={amountDisplayMode} scenarioId={scenarioId} view={view} />
       ) : (
         <DecisionWorkspace
           amountDisplayMode={amountDisplayMode}

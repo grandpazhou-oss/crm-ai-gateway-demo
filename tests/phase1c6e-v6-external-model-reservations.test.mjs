@@ -47,7 +47,7 @@ test("formal UI reserves external model status, DA-02, DA-07, and comparison wit
   const workspace = await readFile(new URL("../src/decision/DecisionWorkspace.tsx", import.meta.url), "utf8");
   const audit = await readFile(new URL("../src/decision/AuditSafetyPage.tsx", import.meta.url), "utf8");
   const nav = app.slice(app.indexOf("const NAVIGATION"), app.indexOf("export default function App"));
-  assert.doesNotMatch(nav, /深度分析/);
+  assert.match(nav, /PRODUCT_FEATURES\.deepAnalysis \? \[\{ page: "deepAnalysis" as const, label: "深度分析" \}\] : \[\]/);
   assert.match(ui, /externalAnalysisStatusLabel\(status, true\)/);
   assert.match(ui, /disabled={!PRODUCT_FEATURES\.deepAnalysis}/);
   assert.match(workspace, /templateId="DA-02"/);

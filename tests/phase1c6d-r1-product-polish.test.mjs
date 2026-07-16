@@ -27,6 +27,6 @@ test("score cards use business Chinese rather than engineering metric names", as
 test("R1 keeps comparison and deep analysis defaults disabled", async () => {
   const features = await readFile(new URL("../src/config/features.ts", import.meta.url), "utf8");
   assert.match(features, /VITE_FEATURE_MODEL_COMPARISON === "true"/);
-  assert.match(features, /deepAnalysis: false/);
-  assert.doesNotMatch(features, /deepAnalysis: true/);
+  assert.match(features, /VITE_FEATURE_DEEP_ANALYSIS === "true"/);
+  assert.doesNotMatch(features, /deepAnalysis: true[,\n]/);
 });

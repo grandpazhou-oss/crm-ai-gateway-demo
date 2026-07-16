@@ -2,6 +2,7 @@ import type { AiActionName, AiActionResult, AiDemoChatResult, AiProviderStatus, 
 import { DEFAULT_LANGUAGE } from "./config/language";
 import type { DecisionMode, DecisionOpportunityDetail, DecisionScenarioCatalog, DecisionView } from "./decision/types";
 import type { ComparisonPage, ComparisonResult, ComparisonStatus } from "./decision/comparisonTypes";
+import type { DeepAnalysisCatalog, DeepAnalysisPreview, DeepAnalysisResult } from "./deepAnalysis/types";
 
 async function json<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -110,3 +111,9 @@ export function runDecisionComparison(input: { scenarioId: string; opportunityTo
 export function resetDecisionComparison() {
   return json<{ ok: true }>("/api/decision-comparison/reset", { method: "POST" });
 }
+
+export function getDeepAnalysisTemplates() { return json<{ data: DeepAnalysisCatalog }>("/api/deep-analysis/templates"); }
+export function previewDeepAnalysis(input: { templateCode: string; mode: DecisionMode; scenarioId: string; opportunityToken: string; role: string }) { return json<{ data: DeepAnalysisPreview }>("/api/deep-analysis/preview", { method: "POST", body: JSON.stringify(input) }); }
+export function runDeepAnalysis(input: { requestId: string; templateCode: string; mode: DecisionMode; scenarioId: string; opportunityToken: string; role: string; confirmed: true }) { return json<{ data: DeepAnalysisResult }>("/api/deep-analysis/run", { method: "POST", body: JSON.stringify(input) }); }
+export function cancelDeepAnalysis(requestId: string) { return json<{ ok: boolean }>(`/api/deep-analysis/${encodeURIComponent(requestId)}/cancel`, { method: "POST" }); }
+export function resetDeepAnalysis() { return json<{ ok: boolean }>("/api/deep-analysis/results", { method: "DELETE" }); }
